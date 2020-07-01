@@ -51,9 +51,15 @@ class IC15Loader(Dataset):
         ori_roots = []
         syn_gts = []
         for root in self.root:
-            ori = [os.path.join(root, k) for k in list(os.listdir(root))]
-            syns = [os.path.join(root + '_syn', k) for k in list(os.listdir(root + '_syn'))]
-            syn_gt = [os.path.join(root + '_syn_gt', k) for k in list(os.listdir(root + '_syn_gt'))]
+            orilist = list(os.listdir(root))
+            orilist.sort()
+            synlist = list(os.listdir(root + '_syn'))
+            synlist.sort()
+            syn_gtlist = list(os.listdir(root + '_syn_gt'))
+            syn_gtlist.sort()
+            ori = [os.path.join(root, k) for k in orilist]
+            syns = [os.path.join(root + '_syn', k) for k in synlist]
+            syn_gt = [os.path.join(root + '_syn_gt', k) for k in syn_gtlist]
             syn_roots += syns
             ori_roots += ori
             syn_gts += syn_gt
@@ -69,33 +75,38 @@ class IC15Loader(Dataset):
         h, w = ori_img.shape[:2]
         # print(h, w)
         c = ori_img.shape[2]
-        syn_img = cv2.resize(syn_img, (w, h))
+        # syn_img = cv2.resize(syn_img, (w, h))
         bboxes, _ = get_imsize_bboxes((h, w), syn_gt_path)
         mask = np.zeros((h, w), dtype=np.uint8)
         if bboxes.shape[0] > 0:
             bboxes = np.reshape(bboxes * ([syn_img.shape[1], syn_img.shape[0]] * 4), (bboxes.shape[0], bboxes.shape[1] // 2, 2)).astype('int32')
             for i in range(bboxes.shape[0]):
                 cv2.drawContours(mask, [bboxes[i]], -1, 1, -1)
+        # debug
+        # print(ori_img_path)
+        # print(syn_img_path)
+        # print(syn_gt_path)
+        # print(bboxes)
         area = np.sum(mask)
-        print(area)
+        # print(area)
         # mask = np.stack([mask] * c, axis=2)
         # print(mask.shape)
-        syn_img, ori_img, mask = self.transforms(syn_img), self.transforms(ori_img), self.transforms(mask, mask=True)
+        syn_img, ori_img, mask = self.transforms(syn_img), self.transforms(ori_img), torch.from_numpy(mask)
+        
         # print(syn_img.shape, ori_img.shape)
         if self.patch_size:
             syn_img, ori_img, mask =  self.crop_images(syn_img, ori_img, mask)
-       
+        # print(mask.sum())
         if area == 0:
             area = 1
-        return syn_img, ori_img, mask, float(area)
+        return syn_img, ori_img, mask.unsqueeze(0).float(), float(area)
 
     def transforms(self, img, mask=False):
         img = Image.fromarray(img)
-        if not mask:
-            img = img.convert('RGB')
+
+        img = img.convert('RGB')
         img = transforms.ToTensor()(img)
-        if not mask:
-            img = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(img)
+        img = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(img)
         return img
 
     def crop_images(self, *images):

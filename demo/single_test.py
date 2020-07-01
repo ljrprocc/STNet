@@ -4,7 +4,7 @@ import cv2
 import sys
 from PIL import Image
 from torchvision import transforms
-sys.path.append('/home/jingru.ljr/visual_motif_removal')
+sys.path.append('/home/jingru.ljr/Motif-Removal')
 from utils.image_utils import save_image
 from utils.train_utils import *
 

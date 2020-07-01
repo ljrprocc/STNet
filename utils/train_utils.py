@@ -53,7 +53,7 @@ def init_loaders(opt, cache_root='', ds='IC15'):
     else:
         train_dataset = IC15Loader(cache_root, train=True, patch_size=opt.patch_size)
         test_dataset = IC15Loader(cache_root, train=False, patch_size=None)
-    _train_data_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=4)
+    _train_data_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=1)
     if opt.patch_size:
         batch_scale_w = int(opt.image_size_w / opt.patch_size)
         batch_scale_h = int(opt.image_size_h / opt.patch_size)

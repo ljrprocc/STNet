@@ -1,16 +1,16 @@
 import sys
-sys.path.append('/home/jingru.ljr/visual_motif_removal')
+sys.path.append('/home/jingru.ljr/Motif-Removal')
 from utils.train_utils import *
 from torch import nn
 import multiprocessing
 
 # paths
 root_path = '..'
-train_tag = 'demo_emojis'
+train_tag = 'demo_icdar2015'
 
 
 # datasets paths
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_3x/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280/']
 
 # dataset configurations
 patch_size = 128
@@ -52,7 +52,7 @@ def train(net, train_loader, test_loader):
     for epoch in range(epochs):
         real_epoch = epoch + 1
         for i, data in enumerate(train_loader, 0):
-            exit(-1)
+            # exit(-1)
             synthesized, images, vm_mask, vm_area = data
             synthesized, images, = synthesized.to(device), images.to(device)
             vm_mask, vm_area = vm_mask.to(device), vm_area.to(device)
@@ -66,6 +66,7 @@ def train(net, train_loader, test_loader):
             batch_cur_size = vm_mask.shape[0]
             net.zero_grad_all()
             loss_l1_images = l1_relative(reconstructed_pixels, real_pixels, batch_cur_size, vm_area)
+            # print(vm_mask.dtype, guess_mask.dtype)
             loss_mask = bce(guess_mask, vm_mask)
             # print(loss_mask, loss_l1_images)
             loss_l1_vm = 0
@@ -80,7 +81,7 @@ def train(net, train_loader, test_loader):
             losses.append(loss.item())
             # print
             if (i + 1) % print_frequency == 0:
-                print('%s [%d, %3d] , baseline loss: %.2f' % (train_tag, real_epoch, batch_size * (i + 1), sum(losses) / len(losses)))
+                print('%s [%d, %3d] , baseline loss: %.4f' % (train_tag, real_epoch, batch_size * (i + 1), sum(losses) / len(losses)))
                 losses = []
         # savings
         if real_epoch % save_frequency == 0:

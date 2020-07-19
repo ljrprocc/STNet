@@ -170,4 +170,5 @@ class DownConvD(nn.Module):
         before_pool = x2
         if self.pooling:
             x2 = self.pool(x2)
+        # Here before_pool is feature map before the last layer of blocks.
         return x2, before_pool

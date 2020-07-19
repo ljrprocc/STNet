@@ -8,10 +8,10 @@ sys.path.append('/home/jingru.ljr/Motif-Removal')
 from utils.image_utils import save_image
 from utils.train_utils import *
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:1')
 
 root_path = '..'
-train_tag = 'demo_emojis'
+train_tag = 'demo_icdar_total'
 
 nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
 
@@ -22,6 +22,7 @@ use_rgb = True
 
 def single_test(img_dir, model, image_name):
     img = cv2.imread(img_dir)
+    img = cv2.resize(img, None, fx=0.6, fy=0.6)
     img = Image.fromarray(img)
     img = img.convert("RGB")
     img = transforms.ToTensor()(img)
@@ -34,11 +35,10 @@ def single_test(img_dir, model, image_name):
     guess_images, guess_mask = output[0], output[1]
     expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
     reconstructed_pixels = guess_images * expanded_guess_mask
-    reconstructed_images = synthesized * (1 - expanded_guess_mask) + reconstructed_pixels
+    reconstructed_images = img * (1 - expanded_guess_mask) + reconstructed_pixels
     transformed_guess_mask = expanded_guess_mask * 2 - 1
 
-    image_un = torch.cat((img, reconstructed_images), 0)
-
+    images_un = torch.cat((img, reconstructed_images), 0)
     images_un = torch.clamp(images_un.data, min=-1, max=1)
     images_un = make_grid(images_un, nrow=img.shape[0], padding=5, pad_value=1)
     save_image(images_un, image_name)
@@ -52,7 +52,7 @@ def run():
 
 
 if __name__ == '__main__':
-    img_dir = '/data/jingru.ljr/icdar2015/syn_ds_root_3x/val_syn/img_8.jpg'
+    img_dir = '/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/val_syn/img_11.jpg'
     run()
 
 

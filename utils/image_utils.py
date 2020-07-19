@@ -103,12 +103,15 @@ def fill_image(target, source, offset_x, offset_y):
 
 
 def save_image(image, name):
-    cv2.imwrite(name + '.jpg', np.transpose(image.cpu().numpy(), (1, 2, 0)))
+    # print(np.transpose(image.cpu().numpy()))
+    # exit(-1)
+    # cv2.imwrite(name + '.jpg', np.transpose(image.cpu().numpy(), (1, 2, 0)))
     image = image / 2 + 0.5  # unnormalize
     image = image.cpu().numpy()
-    plt.imsave(name, np.transpose(image, (1, 2, 0)))
-    
-    # cv2.imwrite(name, np.transpose(image, (1, 2, 0)))
+    # plt.imsave(name, np.transpose(image, (1, 2, 0)))
+    final = np.transpose(image, (1,2,0))
+    print(np.max(final), np.min(final))
+    cv2.imwrite(name, final * 255)
 
 
 def show_image(image):

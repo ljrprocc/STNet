@@ -112,6 +112,39 @@ class TotalVariationLoss(nn.Module):
         return loss / len(results)
 
 
+class AdversialLoss(nn.Module):
+    def __init__(self, type='hinge', target_real_label=1.0, target_fake_label=0.0):
+        super(AdversialLoss, self).__init__()
+
+        self.type = type
+        self.register_buffer('real_label', torch.tensor(target_real_label))
+        self.register_buffer('fake_label', torch.tensor(target_fake_label))
+
+        if type == 'nsgan':
+            self.criterion = nn.BCELoss()
+        elif type == 'lsgan':
+            self.criterion = nn.MSELoss()
+        elif type == 'hinge':
+            self.criterion = nn.ReLU()
+        else:
+            raise NotImplementedError
+    
+    def forward(self, outputs, is_real, is_disc=False):
+        if self.type == 'hinge':
+            if is_disc:
+                if is_real:
+                    outputs = -outputs
+                return self.criterion(1 + outputs).mean()
+            else:
+                # print(output.mean())
+                return (-outputs).mean()
+        
+        else:
+            labels = (self.real_label if is_real else self.fake_label).expand_as(outputs)
+            loss = self.criterion(outputs, labels)
+            return loss
+
+
 def ohem_single(score, gt_text, training_mask):
     pos_num = (int)(np.sum(gt_text > 0.5)) - (int)(np.sum((gt_text > 0.5) & (training_mask <= 0.5)))
     # print(score.shape, gt_text.shape, training_mask.shape)
@@ -163,7 +196,7 @@ def load_globals(nets_path, globals_dict, override=True):
     save_set = {
                 'vm_tag', 'images_root', 'vm_root', 'vm_size', 'image_size', 'image_size_w', 'image_size_h', 'patch_size', 'perturbate', 'opacity_var',
                 'use_rgb', 'weight', 'shared_depth', 'num_blocks', 'batch_size', 'use_vm_decoder', 'rotate_vm',
-                'scale_vm', 'crop_vm', 'batch_vm', 'font', 'text_border', 'blur'
+                'scale_vm', 'crop_vm', 'batch_vm', 'font', 'text_border', 'blur', 'dis_channels', 'gen_channels', 'dilation_depth'
                 }
     to_save = False
     params_file = '%s/train_params.pkl' % nets_path
@@ -237,7 +270,8 @@ def save_test_images(net, loader, image_name, device):
     output = net(synthesized)
     # print(output[0].shape)
     # exit(-1)
-    guess_images, guess_mask = output[0], output[1]
+    guess_images, guess_mask = output[0], output[3]
+    # print(guess_mask)
     expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
     
     reconstructed_pixels = guess_images * expanded_guess_mask
@@ -249,7 +283,7 @@ def save_test_images(net, loader, image_name, device):
         reconstructed_vm = (guess_vm - 1) * expanded_guess_mask + 1
         images_un = (torch.cat((synthesized, reconstructed_images, images, reconstructed_vm, transformed_guess_mask), 0))
     else:
-        images_un = (torch.cat((synthesized, reconstructed_images, images, transformed_guess_mask, expanded_real_mask), 0))
+        images_un = (torch.cat((synthesized, output[-1], guess_images, transformed_guess_mask, expanded_real_mask), 0))
     # print(torch.sum(guess_mask), torch.sum(vm_mask))
     images_un = torch.clamp(images_un.data, min=-1, max=1)
     images_un = make_grid(images_un, nrow=synthesized.shape[0], padding=5, pad_value=1)

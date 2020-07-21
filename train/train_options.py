@@ -28,3 +28,7 @@ class TrainOptions:
         self.use_vm_decoder = False
         self.text_border = False
         self.blur = False
+        self.dis_channels = None
+        self.gen_channels = None
+        self.dilation_depth = None
+        self.gen_only = True

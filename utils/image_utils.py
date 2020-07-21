@@ -110,7 +110,7 @@ def save_image(image, name):
     image = image.cpu().numpy()
     # plt.imsave(name, np.transpose(image, (1, 2, 0)))
     final = np.transpose(image, (1,2,0))
-    print(np.max(final), np.min(final))
+    # print(np.max(final), np.min(final))
     cv2.imwrite(name, final * 255)
 
 

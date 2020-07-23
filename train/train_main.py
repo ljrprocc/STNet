@@ -9,15 +9,15 @@ import multiprocessing
 
 # paths
 root_path = '..'
-train_tag = 'icdar_total'
+train_tag = 'coco_gan'
 
 
 # datasets paths
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/']
+cache_root = ['/data/jingru.ljr/COCO/syn_output/']
 
 # dataset configurations
 patch_size = 256
-image_size_w = 1280
+image_size_w = 640
 image_size_h = 720
 
 # network
@@ -43,7 +43,7 @@ gamma_dis = 0.5
 gamma_gen = 1
 epochs = 50
 batch_size = 16
-print_frequency = 5
+print_frequency = 10
 save_frequency = 5
 device = torch.device('cuda:0')
 

@@ -62,7 +62,7 @@ class InpaintModel(nn.Module):
         # print(x_out[0][:, :, 0].mean(), x_out[0][:, :, 1].mean(), x_out[0][:, :, 2].mean())
         gen_loss = 0.
         dis_loss = 0.
-        # discriminator loss
+        # discriminator loss00000000000000
         dis_input_real = x
         dis_input_fake = fine_image.detach()
         dis_real = self.discriminator(dis_input_real)
@@ -83,7 +83,7 @@ class InpaintModel(nn.Module):
         gen_loss += gen_gan_loss
         # print(fine_image.shape)
 
-        return x_out, gen_loss, dis_loss, result_mask, corase_image
+        return fine_image, gen_loss, dis_loss, result_mask, corase_image
         
     def zero_grad_all(self):
         self.dis_optimzer.zero_grad()

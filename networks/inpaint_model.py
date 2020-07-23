@@ -81,9 +81,14 @@ class ContextAttention(nn.Module):
         # print(f_groups[0].shape)
         for xi, wi, raw_wi in zip(f_groups, w_groups, raw_w_groups):
             wi = wi[0]
-            # print(xi.shape)
-            wi_normed = wi / torch.reshape(torch.clamp(torch.sqrt(torch.sum(wi * wi, (1,2,3))), max=1e-4), [-1, 1, 1, 1])
+            # print(wi.shape)
+            # print(torch.isnan(torch.sqrt(torch.sum(wi * wi, (1,2,3)))).int().sum())
+            # exit(-1)
+            wi_normed = wi / torch.reshape(torch.clamp(torch.sqrt(torch.sum(wi * wi, (1,2,3)) + 1e-8), min=1e-4), [-1, 1, 1, 1])
+            # print(torch.isnan(wi_normed).int().sum())
+            # print(torch.clamp(torch.sqrt(torch.sum(wi * wi, (1,2,3))), max=1e-4))
             yi = F.conv2d(xi, wi_normed, padding=1)
+            
             # print(yi.shape)
             if self.fuse:
                 yi = torch.reshape(yi, [1, 1, fs[2]*fs[3], ihs*iws])
@@ -95,12 +100,13 @@ class ContextAttention(nn.Module):
                 yi = torch.reshape(yi, [1, fs[3], fs[2], iws, ihs])
                 yi = yi.permute(0,2,1,4,3)
             yi = torch.reshape(yi, [1, fs[2], fs[3], iws*ihs])
-
-            # softmax to match
-            yi = yi.clone() * mm
+            
+            # softmax to matcch
+            yi = yi * mm
+            # print(yi)
             yi = F.softmax(yi.clone()*scale, 3)
-            yi = yi.clone() * mm
-
+            yi = yi * mm
+            
             offset = torch.argmax(yi, 3).int()
             offset = torch.stack([offset // hs, offset % hs], axis=-1)
             offset = offset.permute(0,3,1,2)
@@ -108,6 +114,7 @@ class ContextAttention(nn.Module):
             # paste center
             wi_center = raw_wi[0]
             yi = yi.permute(0,3,1,2)
+            # print(yi.shape)
             yi = F.conv_transpose2d(yi, wi_center, stride=rate, padding=1) / 4.
             y.append(yi)
             offsets.append(offset)
@@ -130,9 +137,9 @@ class Coarse2FineModel(nn.Module):
         # Stage1 model
         self.hidden_channels = hidden_channels
         self.dilation_depth = dilation_depth
-        self.gen_relu = nn.ELU()
-        self.relu = nn.ReLU()
-        self.last_act = nn.Tanh()
+        self.gen_relu = nn.ELU(inplace=True)
+        self.relu = nn.ReLU(inplace=True)
+        # self.last_act = nn.Tanh()
         self.build_inpaint_model()
 
     def build_inpaint_model(self):
@@ -150,11 +157,11 @@ class Coarse2FineModel(nn.Module):
         self.conv_1s = nn.ModuleList(self.conv_1s)
         # Stage 2, attention branch
         self.conv_2s = []
-        self.conv_2s.append(nn.Conv2d(3, self.hidden_channels, 5, 1, padding=1))
+        self.conv_2s.append(nn.Conv2d(3, self.hidden_channels, 5, 1, padding=2))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels, self.hidden_channels, 3, 2, padding=1))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels, 2*self.hidden_channels, 3, 1, padding=1))
-        self.conv_2s.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*4, 3, 2, padding=1))
-        self.conv_2s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
+        self.conv_2s.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*2, 3, 2, padding=1))
+        self.conv_2s.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*4, 3, 1, padding=1))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
         # context attention
         self.conv_2s.append(ContextAttention(ksize=3, stride=1, rate=2))
@@ -186,23 +193,26 @@ class Coarse2FineModel(nn.Module):
         x2 = xnow
         offsets = None
         for i, conv in enumerate(self.conv_2s):
+            # print(torch.isnan(x2).int().sum(), i)
             if i == 6:
                 # print(x2.shape)
                 x2, offsets = conv(x2, x2, mask=mask)
                 # print(x2.shape)
             else:
+                # print(x2.shape)
                 x2 = conv(x2)
-                offsets = None
-            x2 = self.gen_relu(x2)
+                # offsets = None
+            x2 = self.gen_relu(x2) if i == 5 else self.relu(x2)
         # print(x1.shape, x2.shape)
         x = torch.cat([x1, x2], 1)
         for i, conv in enumerate(self.totals):
             # if i == 2 or i == 4:
             #     x = F.upsample(x, scale_factor=2)
             # print(x.shape)
+            
             x = conv(x)
             if i < len(self.totals) - 1:
                 x = self.gen_relu(x)
-            else:
-                x = self.last_act(x)
-        return xnow, offsets
+        x = torch.tanh(x)
+        # print(x[0, :, :, 0].mean(), x[0, :, :, 1].mean(), x[0, :, :, 2].mean())
+        return x, offsets

@@ -106,11 +106,13 @@ class IC15Loader(Dataset):
         # print(syn_img_path)
         # print(syn_gt_path)
         # print(bboxes)
-        if self.train and h < self.patch_size:
+        if self.train and (h < self.patch_size or w < self.patch_size):
             print(ori_img_path)
-            ori_img = cv2.copyMakeBorder(ori_img, 0, self.patch_size + 1 - h, 0, 0, cv2.BORDER_CONSTANT)
-            syn_img = cv2.copyMakeBorder(syn_img, 0, self.patch_size + 1 - h, 0, 0, cv2.BORDER_CONSTANT)
-            mask = cv2.copyMakeBorder(mask, 0, self.patch_size + 1 - h, 0, 0, cv2.BORDER_CONSTANT)
+            height_padding = max(self.patch_size + 1 - h, 0)
+            width_padding = max(self.patch_size + 1 - w, 0)
+            ori_img = cv2.copyMakeBorder(ori_img, 0, height_padding, 0, width_padding, cv2.BORDER_CONSTANT)
+            syn_img = cv2.copyMakeBorder(syn_img, 0, height_padding, 0, width_padding, cv2.BORDER_CONSTANT)
+            mask = cv2.copyMakeBorder(mask, 0, height_padding, 0, width_padding, cv2.BORDER_CONSTANT)
         area = np.sum(mask)
         if not self.train and (h % 16 != 0 or w % 16 != 0):
             print(ori_img_path)

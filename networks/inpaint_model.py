@@ -68,18 +68,20 @@ class ContextAttention(nn.Module):
         m = m.permute(0,2,3,4,1)
         # print(m.shape)
         # exit(-1)
-        m = m[0]
+        # m = m[0]
         # print(mask.shape)
-        mm = torch.mean(m, dim=(0,1,2)).eq(0.).float().to(f.device)
+        mms = (torch.mean(m, dim=(1,2,3))<0.80).float().to(f.device)
+
         w_groups = torch.chunk(w, bs, dim=0)
         raw_w_groups = torch.chunk(raw_w, bs, dim=0)
+        mm_groups = torch.chunk(mms, bs, dim=0)
         y = []
         offsets = []
         k = self.fuse_k
         scale = self.softmax_scale
         fuse_weight = torch.reshape(torch.eye(k), [1,1,k,k]).to(f.device)
         # print(f_groups[0].shape)
-        for xi, wi, raw_wi in zip(f_groups, w_groups, raw_w_groups):
+        for xi, wi, raw_wi, mm in zip(f_groups, w_groups, raw_w_groups, mm_groups):
             wi = wi[0]
             # print(wi.shape)
             # print(torch.isnan(torch.sqrt(torch.sum(wi * wi, (1,2,3)))).int().sum())
@@ -101,10 +103,10 @@ class ContextAttention(nn.Module):
                 yi = yi.permute(0,2,1,4,3)
             yi = torch.reshape(yi, [1, fs[2], fs[3], iws*ihs])
             
-            # softmax to matcch
+            # softmax to match
             yi = yi * mm
             # print(yi)
-            yi = F.softmax(yi.clone()*scale, 3)
+            yi = torch.softmax(yi.clone()*scale, 3)
             yi = yi * mm
             
             offset = torch.argmax(yi, 3).int()

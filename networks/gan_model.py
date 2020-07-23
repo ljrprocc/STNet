@@ -38,7 +38,7 @@ class Discriminator(nn.Module):
 class InpaintModel(nn.Module):
     def __init__(self, opt, net_path, device, tag='', gen_only=True):
         super(InpaintModel, self).__init__()
-        self.adversial_loss = AdversialLoss(type='nsgan')
+        self.adversial_loss = AdversialLoss(type='lsgan')
         self.discriminator = Discriminator(opt.dis_channels)
         self.mask_generator = init_nets(opt, net_path, device, tag)
         self.generator = Coarse2FineModel(opt.gen_channels, opt.dilation_depth)
@@ -62,15 +62,16 @@ class InpaintModel(nn.Module):
         # print(x_out[0][:, :, 0].mean(), x_out[0][:, :, 1].mean(), x_out[0][:, :, 2].mean())
         gen_loss = 0.
         dis_loss = 0.
-        # discriminator loss00000000000000
-        dis_input_real = x
-        dis_input_fake = fine_image.detach()
+        # discriminator loss
+        dis_input_real = x * result_mask.repeat(1,3,1,1)
+        # dis_input_fake = fine_image.detach()
+        dis_input_fake = fine_image.detach() * result_mask.repeat(1,3,1,1)
         dis_real = self.discriminator(dis_input_real)
         dis_fake = self.discriminator(dis_input_fake)
         # print(dis_fake)
         dis_real_loss = self.adversial_loss(dis_real, True, True)
         dis_fake_loss = self.adversial_loss(dis_fake, False, True)
-        # print(dis_real_loss, dis_fake_loss)
+        print(dis_real_loss, dis_fake_loss)
         dis_loss += (dis_real_loss + dis_fake_loss) / 2
 
         # generator gan loss

@@ -107,7 +107,7 @@ class IC15Loader(Dataset):
         # print(syn_gt_path)
         # print(bboxes)
         if self.train and (h < self.patch_size or w < self.patch_size):
-            print(ori_img_path)
+            # print(ori_img_path)
             height_padding = max(self.patch_size + 1 - h, 0)
             width_padding = max(self.patch_size + 1 - w, 0)
             ori_img = cv2.copyMakeBorder(ori_img, 0, height_padding, 0, width_padding, cv2.BORDER_CONSTANT)
@@ -128,8 +128,8 @@ class IC15Loader(Dataset):
             syn_img, ori_img, mask =  self.crop_images(syn_img, ori_img, mask)
         # print(mask.sum())
         
-        if self.train and h < self.patch_size:
-            print(syn_img.shape, ori_img.shape, mask.shape)
+        # if self.train and h < self.patch_size:
+        #     print(syn_img.shape, ori_img.shape, mask.shape)
         if area == 0:
             area = 1
         return syn_img, ori_img, mask.unsqueeze(0).float(), float(area), float(h * w)
@@ -155,8 +155,10 @@ class IC15Loader(Dataset):
 
     def crop_images(self, *images):
         w, h  = images[0].shape[1:]
-        left_most = random.randint(0, w - 1 - self.patch_size)
-        top_most = random.randint(0, h - 1 - self.patch_size)
+        # if w <= self.patch_size + 1 or h <= self.patch_size + 1:
+        #     print(w, h)
+        left_most = random.randint(0, w - 1 - self.patch_size) if w > self.patch_size else 0
+        top_most = random.randint(0, h - 1 - self.patch_size) if h > self.patch_size else 0
         # print(left_most, top_most)
         cropped = []
         for image in images:

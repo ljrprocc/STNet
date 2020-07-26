@@ -228,6 +228,8 @@ def init_loaders(opt, cache_root='', ds='IC15'):
     else:
         train_dataset = IC15Loader(cache_root, train=True, patch_size=opt.patch_size)
         test_dataset = IC15Loader(cache_root, train=False, patch_size=None)
+    # print(train_dataset.root)
+    # print(len(train_dataset))
     _train_data_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=1)
     if opt.patch_size:
         batch_scale_w = int(opt.image_size_w / opt.patch_size)
@@ -274,7 +276,13 @@ def save_test_images(net, loader, image_name, device):
         guess_images, guess_mask = output[0], output[3]
         # print(guess_mask)
         expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
-        
+        print(torch.mean(guess_images, (0,2,3)))
+        # debug
+        # for i in range(guess_images.shape[0]):
+        #     a = guess_images[i, 0, :, :].cpu().numpy()
+        #     b = guess_images[i, 1, :, :].cpu().numpy()
+        #     c = guess_images[i, 2, :, :].cpu().numpy()
+        #     print(np.corrcoef(a, b), np.corrcoef(a, c), np.corrcoef(b, c))
         reconstructed_pixels = guess_images * expanded_guess_mask
         reconstructed_images = synthesized * (1 - expanded_guess_mask) + reconstructed_pixels
         real_pixels = images * expanded_real_mask
@@ -285,7 +293,7 @@ def save_test_images(net, loader, image_name, device):
             reconstructed_vm = (guess_vm - 1) * expanded_guess_mask + 1
             images_un = (torch.cat((synthesized, reconstructed_images, images, reconstructed_vm, transformed_guess_mask), 0))
         else:
-            images_un = (torch.cat((synthesized, guess_images, transformed_guess_mask, expanded_real_mask), 0))
+            images_un = (torch.cat((synthesized, reconstructed_images, guess_images, transformed_guess_mask, expanded_real_mask), 0))
         # print(torch.sum(guess_mask), torch.sum(vm_mask))
         images_un = torch.clamp(images_un.data, min=-1, max=1)
         images_un = make_grid(images_un, nrow=synthesized.shape[0], padding=5, pad_value=1)

@@ -11,7 +11,7 @@ import multiprocessing
 def get_list(dir, gt=False):
     ori_list = list(os.listdir(dir))
     res = []
-    mode = '.txt' if gt else '.jpg'
+    mode = '.txt' if gt else '.JPG'
     for file in ori_list:
         if os.path.splitext(file)[-1] == mode:
             res.append(file)
@@ -162,7 +162,6 @@ class IC15Loader(Dataset):
         # print(left_most, top_most)
         cropped = []
         for image in images:
-            
             if len(image.shape) == 3:
                 cropped.append(image[:, left_most: left_most + self.patch_size, top_most: top_most + self.patch_size])
             else:

@@ -38,7 +38,7 @@ class Discriminator(nn.Module):
 class InpaintModel(nn.Module):
     def __init__(self, opt, net_path, device, tag='', gen_only=True):
         super(InpaintModel, self).__init__()
-        self.adversial_loss = AdversialLoss(type='lsgan')
+        self.adversial_loss = AdversialLoss(type='nsgan')
         self.discriminator = Discriminator(opt.dis_channels)
         self.mask_generator = init_nets(opt, net_path, device, tag)
         self.generator = Coarse2FineModel(opt.gen_channels, opt.dilation_depth)
@@ -71,7 +71,7 @@ class InpaintModel(nn.Module):
         # print(dis_fake)
         dis_real_loss = self.adversial_loss(dis_real, True, True)
         dis_fake_loss = self.adversial_loss(dis_fake, False, True)
-        print(dis_real_loss, dis_fake_loss)
+        # print(dis_real_loss, dis_fake_loss)
         dis_loss += (dis_real_loss + dis_fake_loss) / 2
 
         # generator gan loss
@@ -84,7 +84,7 @@ class InpaintModel(nn.Module):
         gen_loss += gen_gan_loss
         # print(fine_image.shape)
 
-        return fine_image, gen_loss, dis_loss, result_mask, corase_image
+        return x_out, gen_loss, dis_loss, result_mask, corase_image
         
     def zero_grad_all(self):
         self.dis_optimzer.zero_grad()
@@ -115,6 +115,12 @@ class InpaintModel(nn.Module):
                 para.requires_grad = False
         else:
             self.mask_generator.set_optimizers()
+            # Default finetune
+            for para in self.mask_generator.shared_decoder.parameters():
+                para.requires_grad = False
+
+            for para in self.mask_generator.encoder.parameters():
+                para.requires_grad = False
 
     def load(self, epoch):
         pathD = '%s/epoch%d/baseline_D.pth' % (self.net_path, epoch)

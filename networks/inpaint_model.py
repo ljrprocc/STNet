@@ -49,9 +49,9 @@ class ContextAttention(nn.Module):
         if mask is not None:
             mask = F.interpolate(mask, size=(int(hs/rate), int(ws/rate)))
         # print(mask.shape)
-        int_fs = f.shape
+        # int_fs = f.shape
         ibs, ics, ihs, iws = b.shape
-        f_groups = torch.chunk(f, int_fs[0], dim=0)
+        f_groups = torch.chunk(f, fs[0], dim=0)
         w = extract_image_patches(b, kernel=self.ksize, stride=self.stride, dilation=1)
         # print(f_groups[0].shape)
         # exit(-1)
@@ -64,13 +64,13 @@ class ContextAttention(nn.Module):
         
         m = extract_image_patches(mask, kernel=self.ksize, stride=self.stride)
         # print(m.shape)
-        m = torch.reshape(m, (bs, -1, self.ksize, self.ksize, 1))
+        m = torch.reshape(m, (bs, -1, 1, self.ksize, self.ksize))
         m = m.permute(0,2,3,4,1)
         # print(m.shape)
         # exit(-1)
         # m = m[0]
         # print(mask.shape)
-        mms = (torch.mean(m, dim=(1,2,3))<0.80).float().to(f.device)
+        mms = (torch.mean(1 - m, dim=(1,2,3)) < 0.9).float().to(f.device)
 
         w_groups = torch.chunk(w, bs, dim=0)
         raw_w_groups = torch.chunk(raw_w, bs, dim=0)
@@ -114,10 +114,13 @@ class ContextAttention(nn.Module):
             offset = offset.permute(0,3,1,2)
 
             # paste center
+            # wi_center = raw_wi[0]
             wi_center = raw_wi[0]
             yi = yi.permute(0,3,1,2)
-            # print(yi.shape)
+            # print(yi.shape, wi_center.shape)
             yi = F.conv_transpose2d(yi, wi_center, stride=rate, padding=1) / 4.
+            # print(yi.shape)
+            # exit(-1)
             y.append(yi)
             offsets.append(offset)
 
@@ -148,37 +151,62 @@ class Coarse2FineModel(nn.Module):
         # Define Coarse-to-Fine Network
         # Stage 2, conv branch
         self.conv_1s = []
+        self.bn1s = []
         self.conv_1s.append(nn.Conv2d(3, self.hidden_channels, 5, 1, padding=1))
+        self.bn1s.append(nn.BatchNorm2d(self.hidden_channels))
         self.conv_1s.append(nn.Conv2d(self.hidden_channels, self.hidden_channels, 3, 2, padding=1))
+        self.bn1s.append(nn.BatchNorm2d(self.hidden_channels))
         self.conv_1s.append(nn.Conv2d(self.hidden_channels, self.hidden_channels*2, 3, 1, padding=1))
+        self.bn1s.append(nn.BatchNorm2d(self.hidden_channels * 2))
         self.conv_1s.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*2, 3, 2, padding=1))
+        self.bn1s.append(nn.BatchNorm2d(self.hidden_channels * 2))
         self.conv_1s.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*4, 3, 1, padding=1))
+        self.bn1s.append(nn.BatchNorm2d(self.hidden_channels * 4))
         self.conv_1s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
+        self.bn1s.append(nn.BatchNorm2d(self.hidden_channels * 4))
         for i in range(self.dilation_depth):
             self.conv_1s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, dilation=2 ** (i + 1), padding=2 ** (i + 1)))
+            self.bn1s.append(nn.BatchNorm2d(self.hidden_channels * 4))
         self.conv_1s = nn.ModuleList(self.conv_1s)
         # Stage 2, attention branch
         self.conv_2s = []
+        self.bn2s = []
         self.conv_2s.append(nn.Conv2d(3, self.hidden_channels, 5, 1, padding=2))
+        self.bn2s.append(nn.BatchNorm2d(self.hidden_channels))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels, self.hidden_channels, 3, 2, padding=1))
+        self.bn2s.append(nn.BatchNorm2d(self.hidden_channels))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels, 2*self.hidden_channels, 3, 1, padding=1))
+        self.bn2s.append(nn.BatchNorm2d(self.hidden_channels * 2))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*2, 3, 2, padding=1))
+        self.bn2s.append(nn.BatchNorm2d(self.hidden_channels * 2))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*4, 3, 1, padding=1))
+        self.bn2s.append(nn.BatchNorm2d(self.hidden_channels * 4))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
+        self.bn2s.append(nn.BatchNorm2d(self.hidden_channels * 4))
         # context attention
         self.conv_2s.append(ContextAttention(ksize=3, stride=1, rate=2))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
+        self.bn2s.append(nn.BatchNorm2d(self.hidden_channels * 4))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
+        self.bn2s.append(nn.BatchNorm2d(self.hidden_channels * 4))
         self.conv_2s = nn.ModuleList(self.conv_2s)
         # total merged branch
         self.totals = []
+        self.total_bns = []
         self.totals.append(nn.Conv2d(self.hidden_channels*8, self.hidden_channels*4, 3, 1, padding=1))
+        self.total_bns.append(nn.BatchNorm2d(self.hidden_channels * 4))
         self.totals.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
+        self.total_bns.append(nn.BatchNorm2d(self.hidden_channels * 4))
         self.totals.append(nn.ConvTranspose2d(self.hidden_channels*4, self.hidden_channels*2, 4, 2, padding=1))
+        self.total_bns.append(nn.BatchNorm2d(self.hidden_channels * 2))
         self.totals.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*2, 3, 1, padding=1))
+        self.total_bns.append(nn.BatchNorm2d(self.hidden_channels * 2))
         self.totals.append(nn.ConvTranspose2d(self.hidden_channels*2, self.hidden_channels*2, 4, 2, padding=1))
+        self.total_bns.append(nn.BatchNorm2d(self.hidden_channels * 2))
         self.totals.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels, 3, 1, padding=1))
+        self.total_bns.append(nn.BatchNorm2d(self.hidden_channels))
         self.totals.append(nn.Conv2d(self.hidden_channels, self.hidden_channels // 2, 3, 1, padding=1))
+        self.total_bns.append(nn.BatchNorm2d(self.hidden_channels // 2))
         self.totals.append(nn.Conv2d(self.hidden_channels // 2, 3, 3, 1, padding=1))
         self.totals = nn.ModuleList(self.totals)
 
@@ -204,7 +232,7 @@ class Coarse2FineModel(nn.Module):
                 # print(x2.shape)
                 x2 = conv(x2)
                 # offsets = None
-            x2 = self.gen_relu(x2) if i == 5 else self.relu(x2)
+            x2 = self.gen_relu(x2) if i != 5 else self.relu(x2)
         # print(x1.shape, x2.shape)
         x = torch.cat([x1, x2], 1)
         for i, conv in enumerate(self.totals):

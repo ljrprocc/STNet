@@ -10,15 +10,17 @@ import multiprocessing
 # paths
 root_path = '..'
 # train_tag = 'coco_gan'
-train_tag = 'icdar_total2'
+# train_tag = 'icdar_total2'
+train_tag = 'demo_msra_1'
 
 # datasets paths
 # cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/']
+# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/']
+cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
 patch_size = 256
-image_size_w = 1280
+image_size_w = 960
 image_size_h = 720
 
 # network
@@ -29,10 +31,10 @@ num_blocks = (3, 3, 3, 3, 3)
 shared_depth = 2
 use_vm_decoder = False
 use_rgb = True
-gen_only = True
+gen_only = False
 dis_channels = 64
 gen_channels = 48
-dilation_depth = 3
+dilation_depth = 0
 
 # train configurations
 gamma1 = 5   # L1 image
@@ -40,13 +42,15 @@ gamma2 = 1   # L1 visual motif
 gamma3 = 10  # L1 style loss
 gamma4 = 0.02 # Perceptual
 gamma5 = 1   # L1 valid
-gamma_dis = 0.5
+gamma_dis = 0.3
 gamma_gen = 1
-epochs = 50
+gamma_coarse = 1
+gamma_coarse_hole = 0.2
+epochs = 100
 batch_size = 16
 print_frequency = 10
 save_frequency = 5
-device = torch.device('cuda:1')
+device = torch.device('cuda:0')
 
 def l1_relative(reconstructed, real, batch, area):
     loss_l1 = torch.abs(reconstructed - real).view(batch, -1)
@@ -108,6 +112,7 @@ def train(net, train_loader, test_loader):
                 expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
                 reconstructed_pixels = guess_images * expanded_vm_mask
                 reconstructed_images = synthesized * (1 - expanded_guess_mask) + reconstructed_pixels
+                
                 real_pixels = images * expanded_vm_mask
                 batch_cur_size = vm_mask.shape[0]
                 # total_area = vm_mask.shape[-1] * vm_mask.shape[-2]
@@ -115,17 +120,19 @@ def train(net, train_loader, test_loader):
                 # loss_l1_images = l1_relative(reconstructed_pixels, real_pixels, batch_cur_size, vm_area)
                 # loss_l1_holes = l1_relative(synthesized * (1 - expanded_guess_mask), images * (1 - expanded_vm_mask), batch_cur_size, total_area-vm_area)
                 loss_l1_recon = l1_loss(reconstructed_pixels, real_pixels)
-                loss_l1_outer = l1_loss(synthesized * (1 - expanded_guess_mask), images * (1 - expanded_vm_mask))
+                loss_l1_outer = l1_loss(reconstructed_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
                 # print(loss_l1_recon, loss_l1_outer)
-                loss_mask = 0
+                loss_mask, loss_coarse, loss_coarse_hole = 0., 0., 0.
                 if not gen_only:
                     # print(vm_mask.dtype, guess_mask.dtype)
                     loss_mask = bce(guess_mask, vm_mask)
+                    loss_coarse = l1_loss(coarse_images * expanded_vm_mask, real_pixels)
+                    loss_coarse_hole = l1_loss(coarse_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
                     # loss_mask, selected_masks = dice_loss(guess_mask, vm_mask, dice, selected_masks)
                     # print(loss_mask, loss_l1_images)
                     # Construct Sytle Loss
-                    loss_style = style(vgg_feas(reconstructed_images), vgg_feas(images))
-                    loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas(images))
+                    # loss_style = style(vgg_feas(reconstructed_images), vgg_feas(images))
+                    # loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas(images))
                     # loss_style = 0
                     loss_l1_vm = 0
                 # if len(results) == 3:
@@ -134,7 +141,7 @@ def train(net, train_loader, test_loader):
                 #     real_vm = motifs.to(device) * expanded_vm_mask
                 #     loss_l1_vm = l1_relative(reconstructed_motifs, real_vm, batch_cur_size, vm_area)
                 # loss = gamma1 * loss_l1_images + gamma2 * loss_l1_vm + gamma3 * loss_style + gamma4 * loss_perceptual + gamma5 * loss_l1_holes+ loss_mask
-                loss = gamma1 * loss_l1_recon + loss_mask + gamma5 * loss_l1_outer + gamma_dis * dis_loss + gamma_gen * gen_loss
+                loss = gamma1 * loss_l1_recon + loss_mask + gamma5 * loss_l1_outer + gamma_dis * dis_loss + gamma_gen * gen_loss + gamma_coarse * loss_coarse + gamma_coarse_hole * loss_coarse_hole
                 loss.backward()
                 net.step_all()
                 losses.append(loss.item())
@@ -154,6 +161,7 @@ def train(net, train_loader, test_loader):
                 os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
             torch.save(net.generator.state_dict(), '%s/epoch%d/net_baseline_G.pth' % (nets_path, real_epoch))
             torch.save(net.discriminator.state_dict(), '%s/epoch%d/net_baseline_D.pth' % (nets_path, real_epoch))
+            torch.save(net.mask_generator.state_dict(), '%s/net_baseline%d.pth' % (nets_path, real_epoch))
 
 
     print('Training Done:)')

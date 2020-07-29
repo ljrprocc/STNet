@@ -123,8 +123,8 @@ class InpaintModel(nn.Module):
                 para.requires_grad = False
 
     def load(self, epoch):
-        pathD = '%s/epoch%d/baseline_D.pth' % (self.net_path, epoch)
-        pathG = '%s/epoch%d/baseline_G.pth' % (self.net_path, epoch)
+        pathD = '%s/epoch%d/net_baseline_D.pth' % (self.net_path, epoch)
+        pathG = '%s/epoch%d/net_baseline_G.pth' % (self.net_path, epoch)
         print('Loading parameters of generator....')
         self.generator.load_state_dict(torch.load(pathG))
         print('Loading parameters of discriminator...')

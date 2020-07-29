@@ -7,6 +7,7 @@ from torchvision import transforms
 sys.path.append('/home/jingru.ljr/Motif-Removal')
 from utils.image_utils import save_image
 from utils.train_utils import *
+from utils.text_utils import *
 
 device = torch.device('cuda:1')
 

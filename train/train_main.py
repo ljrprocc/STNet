@@ -9,18 +9,18 @@ import multiprocessing
 
 # paths
 root_path = '..'
-# train_tag = 'coco_gan'
-# train_tag = 'icdar_total2'
-train_tag = 'demo_msra_1'
+train_tag = 'coco_gan'
+# train_tag = 'icdar_total_256'
+# train_tag = 'demo_msra_1'
 
 # datasets paths
-# cache_root = ['/data/jingru.ljr/COCO/syn_output/']
+cache_root = ['/data/jingru.ljr/COCO/syn_output/']
 # cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/']
-cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
+# cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
 patch_size = 256
-image_size_w = 960
+image_size_w = 600
 image_size_h = 720
 
 # network
@@ -31,7 +31,7 @@ num_blocks = (3, 3, 3, 3, 3)
 shared_depth = 2
 use_vm_decoder = False
 use_rgb = True
-gen_only = False
+gen_only = True
 dis_channels = 64
 gen_channels = 48
 dilation_depth = 0
@@ -42,11 +42,11 @@ gamma2 = 1   # L1 visual motif
 gamma3 = 10  # L1 style loss
 gamma4 = 0.02 # Perceptual
 gamma5 = 1   # L1 valid
-gamma_dis = 0.3
-gamma_gen = 1
+gamma_dis = 0.5
+gamma_gen = 5
 gamma_coarse = 1
 gamma_coarse_hole = 0.2
-epochs = 100
+epochs = 50
 batch_size = 16
 print_frequency = 10
 save_frequency = 5
@@ -161,7 +161,8 @@ def train(net, train_loader, test_loader):
                 os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
             torch.save(net.generator.state_dict(), '%s/epoch%d/net_baseline_G.pth' % (nets_path, real_epoch))
             torch.save(net.discriminator.state_dict(), '%s/epoch%d/net_baseline_D.pth' % (nets_path, real_epoch))
-            torch.save(net.mask_generator.state_dict(), '%s/net_baseline%d.pth' % (nets_path, real_epoch))
+            if not gen_only:
+                torch.save(net.mask_generator.state_dict(), '%s/net_baseline%d.pth' % (nets_path, real_epoch))
 
 
     print('Training Done:)')

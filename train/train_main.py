@@ -9,18 +9,18 @@ import multiprocessing
 
 # paths
 root_path = '..'
-train_tag = 'coco_gan'
-# train_tag = 'icdar_total_256'
-# train_tag = 'demo_msra_1'
+# train_tag = 'coco_gan'
+# train_tag = 'icdar_total'
+train_tag = 'demo_msra_1'
 
 # datasets paths
-cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/']
+# cache_root = ['/data/jingru.ljr/COCO/syn_output/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280/']
 # cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
 patch_size = 256
-image_size_w = 600
+image_size_w = 1280
 image_size_h = 720
 
 # network
@@ -32,12 +32,13 @@ shared_depth = 2
 use_vm_decoder = False
 use_rgb = True
 gen_only = True
-dis_channels = 64
-gen_channels = 48
+dis_channels = 32
+gen_channels = 24
 dilation_depth = 0
+TDBmode = True
 
 # train configurations
-gamma1 = 5   # L1 image
+gamma1 = 2   # L1 image
 gamma2 = 1   # L1 visual motif
 gamma3 = 10  # L1 style loss
 gamma4 = 0.02 # Perceptual
@@ -46,10 +47,10 @@ gamma_dis = 0.5
 gamma_gen = 5
 gamma_coarse = 1
 gamma_coarse_hole = 0.2
-epochs = 50
+epochs = 500
 batch_size = 16
 print_frequency = 10
-save_frequency = 5
+save_frequency = 50
 device = torch.device('cuda:0')
 
 def l1_relative(reconstructed, real, batch, area):
@@ -98,7 +99,12 @@ def train(net, train_loader, test_loader):
                 synthesized, images, = synthesized.to(device), images.to(device)
                 vm_mask, vm_area, total_area = vm_mask.to(device), vm_area.to(device), total_area.to(device)
                 # results = net(synthesized)
-                guess_images, gen_loss, dis_loss, guess_mask, coarse_images = net(synthesized)
+                if TDBmode:
+                    results = net(synthesized)
+                    guess_images, guess_mask = results[0], results[1]
+                    gen_loss, dis_loss = 0., 0.
+                else:
+                    guess_images, gen_loss, dis_loss, guess_mask, coarse_images = net(synthesized)
                 expanded_vm_mask = vm_mask.repeat(1, 3, 1, 1)
 
                 # results = net(synthesized, 1 - expanded_vm_mask)
@@ -123,7 +129,7 @@ def train(net, train_loader, test_loader):
                 loss_l1_outer = l1_loss(reconstructed_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
                 # print(loss_l1_recon, loss_l1_outer)
                 loss_mask, loss_coarse, loss_coarse_hole = 0., 0., 0.
-                if not gen_only:
+                if TDBmode or (not TDBmode and not gen_only):
                     # print(vm_mask.dtype, guess_mask.dtype)
                     loss_mask = bce(guess_mask, vm_mask)
                     loss_coarse = l1_loss(coarse_images * expanded_vm_mask, real_pixels)
@@ -149,6 +155,7 @@ def train(net, train_loader, test_loader):
                 G_losses.append(gen_loss.item())
             # print
             if (i + 1) % print_frequency == 0:
+                print('%s [%d, %3d], total loss: %.4f' %)
                 print('%s [%d, %3d], total loss: %.4f, D loss: %.4f, G loss: %.4f' % (train_tag, real_epoch, batch_size * (i + 1), sum(losses) / len(losses), sum(D_losses)/len(D_losses), sum(G_losses) / len(G_losses)))
                 losses = []
                 style_losses = []
@@ -159,9 +166,10 @@ def train(net, train_loader, test_loader):
             _ = save_test_images(net, test_loader, image_name, device)
             if not os.path.exists('%s/epoch%d'%(nets_path, real_epoch)):
                 os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
-            torch.save(net.generator.state_dict(), '%s/epoch%d/net_baseline_G.pth' % (nets_path, real_epoch))
-            torch.save(net.discriminator.state_dict(), '%s/epoch%d/net_baseline_D.pth' % (nets_path, real_epoch))
-            if not gen_only:
+            if not TDBmode:
+                torch.save(net.generator.state_dict(), '%s/epoch%d/net_baseline_G.pth' % (nets_path, real_epoch))
+                torch.save(net.discriminator.state_dict(), '%s/epoch%d/net_baseline_D.pth' % (nets_path, real_epoch))
+            if TDBmode or (not TDBmode and not gen_only):
                 torch.save(net.mask_generator.state_dict(), '%s/net_baseline%d.pth' % (nets_path, real_epoch))
 
 
@@ -173,7 +181,7 @@ def run():
     opt = load_globals(nets_path, globals(), override=True)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
     # base_net = init_nets(opt, nets_path, device)
-    base_net = InpaintModel(opt, nets_path, device).to(device)
+    base_net = InpaintModel(opt, nets_path, device).to(device) if not TDBmode else init_nets(opt, nets_path, device)
     train(base_net, train_loader, test_loader)
 
 

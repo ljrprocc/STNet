@@ -16,7 +16,7 @@ from utils.text_utils import run_boxes
 from networks.gan_model import *
 import tqdm
 
-device = torch.device('cuda:1')
+device = torch.device('cuda:0')
 
 root_path = '..'
 train_tag = 'icdar_total_256'
@@ -27,6 +27,7 @@ num_blocks = (3, 3, 3, 3, 3)
 shared_depth = 2
 use_vm_decoder = False
 use_rgb = True
+dilation_depth= 0
 
 criterion = nn.MSELoss()
 

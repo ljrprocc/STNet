@@ -1,6 +1,9 @@
 import torch
 from torch.utils.data import Dataset
+import sys
+sys.path.append('/home/jingru.ljr/Motif-Removal/')
 from utils.image_utils import *
+
 from torchvision import transforms
 import numpy as np
 import os
@@ -41,13 +44,19 @@ def get_imsize_bboxes(img_size, gt_path):
         bboxes.append(box)
     return np.array(bboxes), tags
 
+def debugs(idx):
+    dataLoader = IC15Loader('/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/', train=False, debug=True)
+    k = dataLoader[idx]
+
+
 class IC15Loader(Dataset):
-    def __init__(self, data_root, train=True, patch_size=None):
+    def __init__(self, data_root, train=True, patch_size=None, debug=False):
         super(IC15Loader, self).__init__()
         self.root = self.init_root(images_root=data_root, train=train)
         self.train = train
         self.syn_img_paths, self.ori_img_paths, self.syn_gt_paths = self.gen_files()
         self.patch_size = patch_size
+        self.debug = debug
 
     def init_root(self, images_root, train):
         if train:
@@ -100,6 +109,11 @@ class IC15Loader(Dataset):
             bboxes = np.reshape(bboxes * ([w, h] * 4), (bboxes.shape[0], bboxes.shape[1] // 2, 2)).astype('int32')
             for i in range(bboxes.shape[0]):
                 cv2.drawContours(mask, [bboxes[i]], -1, 1, -1)
+                if self.debug:
+                    cv2.drawContours(syn_img, [bboxes[i].reshape(4,2).astype(np.int32)],  -1, (255, 0, 0), 2)
+            if self.debug:
+                cv2.imwrite('/home/jingru.ljr/checkpoints/gt_' + syn_img_path.split('/')[-1], syn_img)
+                return 0       
                 # cv2.drawContours(syn_img, [bboxes[i]], -1, 0, -1)
         # debug
         # print(ori_img_path)
@@ -170,3 +184,7 @@ class IC15Loader(Dataset):
 
     def __len__(self):
         return len(self.syn_img_paths)
+
+
+if __name__ == "__main__":
+    debugs(100)

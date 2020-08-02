@@ -238,7 +238,7 @@ def init_loaders(opt, cache_root='', ds='IC15'):
     else:
         batch_scale = 1
     _test_data_loader = DataLoader(test_dataset, batch_size=1,
-                                   shuffle=True, num_workers=1)
+                                   shuffle=False, num_workers=1)
     return _train_data_loader, _test_data_loader
 
 

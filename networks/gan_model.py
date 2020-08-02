@@ -41,9 +41,9 @@ class InpaintModel(nn.Module):
         self.adversial_loss = AdversialLoss(type='nsgan')
         self.discriminator = Discriminator(opt.dis_channels)
         self.mask_generator = init_nets(opt, net_path, device, tag)
-        self.generator = Coarse2FineModel(opt.gen_channels, opt.dilation_depth)
+        self.generator = Coarse2FineModel(opt.gen_channels)
 
-        # print(self.discriminator)
+        # print(self.generator)
         self.gen_only = gen_only
         self.net_path = net_path
         self.tag = tag
@@ -104,7 +104,7 @@ class InpaintModel(nn.Module):
             lr = 0.001,
             betas = (0.0, 0.9)
         )
-
+        # print(self.generator.parameters()[0])
         self.gen_optimzer = optim.Adam(
             params = self.generator.parameters(),
             lr = 0.001,

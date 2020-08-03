@@ -15,12 +15,12 @@ train_tag = 'demo_msra_1'
 
 # datasets paths
 # cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280/']
-# cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
+# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280/']
+cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
 patch_size = 256
-image_size_w = 1280
+image_size_w = 960
 image_size_h = 720
 
 # network
@@ -38,7 +38,7 @@ dilation_depth = 0
 TDBmode = True
 
 # train configurations
-gamma1 = 2   # L1 image
+gamma1 = 0.2   # L1 image
 gamma2 = 1   # L1 visual motif
 gamma3 = 10  # L1 style loss
 gamma4 = 0.02 # Perceptual
@@ -47,10 +47,10 @@ gamma_dis = 0.5
 gamma_gen = 5
 gamma_coarse = 1
 gamma_coarse_hole = 0.2
-epochs = 500
-batch_size = 16
-print_frequency = 10
-save_frequency = 50
+epochs = 1500
+batch_size = 24
+print_frequency = 2
+save_frequency = 150
 device = torch.device('cuda:0')
 
 def l1_relative(reconstructed, real, batch, area):
@@ -74,7 +74,8 @@ def dice_loss(guess_mask, vm_mask, dice_criterion, training_masks=None):
     loss = dice_criterion(guess_mask, vm_mask, selected_masks)
     return loss, selected_masks
 
-def train(net, train_loader, test_loader):
+def train(nets, train_loader, test_loader):
+    net = nets.module
     bce = nn.BCELoss()
     style = StyleLoss()
     per = PerceptionLoss()
@@ -132,8 +133,9 @@ def train(net, train_loader, test_loader):
                 if TDBmode or (not TDBmode and not gen_only):
                     # print(vm_mask.dtype, guess_mask.dtype)
                     loss_mask = bce(guess_mask, vm_mask)
-                    loss_coarse = l1_loss(coarse_images * expanded_vm_mask, real_pixels)
-                    loss_coarse_hole = l1_loss(coarse_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
+                    if not TDBmode:
+                        loss_coarse = l1_loss(coarse_images * expanded_vm_mask, real_pixels)
+                        loss_coarse_hole = l1_loss(coarse_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
                     # loss_mask, selected_masks = dice_loss(guess_mask, vm_mask, dice, selected_masks)
                     # print(loss_mask, loss_l1_images)
                     # Construct Sytle Loss
@@ -151,12 +153,14 @@ def train(net, train_loader, test_loader):
                 loss.backward()
                 net.step_all()
                 losses.append(loss.item())
-                D_losses.append(dis_loss.item())
-                G_losses.append(gen_loss.item())
+                # D_losses.append(dis_loss.item())
+                # G_losses.append(gen_loss.item())
             # print
             if (i + 1) % print_frequency == 0:
-                print('%s [%d, %3d], total loss: %.4f' %)
-                print('%s [%d, %3d], total loss: %.4f, D loss: %.4f, G loss: %.4f' % (train_tag, real_epoch, batch_size * (i + 1), sum(losses) / len(losses), sum(D_losses)/len(D_losses), sum(G_losses) / len(G_losses)))
+                if TDBmode:
+                    print('%s [%d, %3d], total loss: %.4f' % (train_tag, real_epoch, batch_size * (i + 1), sum(losses) / len(losses)))
+                else:
+                    print('%s [%d, %3d], total loss: %.4f, D loss: %.4f, G loss: %.4f' % (train_tag, real_epoch, batch_size * (i + 1), sum(losses) / len(losses), sum(D_losses)/len(D_losses), sum(G_losses) / len(G_losses)))
                 losses = []
                 style_losses = []
         # savings
@@ -169,7 +173,9 @@ def train(net, train_loader, test_loader):
             if not TDBmode:
                 torch.save(net.generator.state_dict(), '%s/epoch%d/net_baseline_G.pth' % (nets_path, real_epoch))
                 torch.save(net.discriminator.state_dict(), '%s/epoch%d/net_baseline_D.pth' % (nets_path, real_epoch))
-            if TDBmode or (not TDBmode and not gen_only):
+            if TDBmode:
+                torch.save(net.state_dict(), '%s/net_baseline%d.pth' % (nets_path, real_epoch))
+            if (not TDBmode and not gen_only):
                 torch.save(net.mask_generator.state_dict(), '%s/net_baseline%d.pth' % (nets_path, real_epoch))
 
 

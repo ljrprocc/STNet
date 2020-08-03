@@ -36,7 +36,7 @@ def run_boxes(text_boxes, pred_mask, write_path, write_res_name):
     # print(imgk[:, :, 0] - text_boxes[:, :, 1])
     logit = np.log((pred_mask) / (1 - pred_mask + 1e-9) + 1e-9)
     # Here 2.2 = log(0.9 / (1 - 0.9))
-    output = (np.sign(logit - 4.5) + 1) / 2
+    output = (np.sign(logit - 4.2) + 1) / 2
     kernel_mask = output * logit
     # print(np.max(kernel_mask))
     bboxes = mask2bboxes(kernel_mask.astype(np.uint8))

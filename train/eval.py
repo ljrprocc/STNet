@@ -56,11 +56,17 @@ def test(test_loader, model, debug=False):
             write_inpaint_path = '%s/%s'%(inpaint_path, jpg_name)
             
             guess_images, guess_mask = output[0], output[3]
-            real_img = torch.clamp(img.data, min=-1, max=1)
-            real_img = real_img.squeeze().cpu().numpy().copy() / 2 + 0.5
-            real_img = np.transpose(real_img, (1,2,0)) * 255
+            real_img = img.data.squeeze().cpu().numpy().copy()
+            real_img = np.transpose(real_img, (1,2,0)) * [0.229, 0.224, 0.225] + [0.485, 0.456, 0.406]
+            real_img = np.around(real_img * 255).astype("uint8")
+            # real_img = torch.clamp(img.data, min=-1, max=1)
+            # real_img = real_img.squeeze().cpu().numpy().copy() / 2 + 0.5
+            # print(real_img.shape)
+            # exit(-1)
+            # real_img = np.transpose(real_img, (1,2,0)) * 255
+            # real_img = real_img[:, :, ::-1]
             # print(real_img)
-            run_boxes(real_img.astype(np.uint8), guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
+            run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
             expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
             reconstructed_pixels = guess_images * expanded_guess_mask
             reconstructed_images = img * (1 - expanded_guess_mask) + reconstructed_pixels

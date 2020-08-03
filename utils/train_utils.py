@@ -195,7 +195,7 @@ def init_folders(*folders):
 def load_globals(nets_path, globals_dict, override=True):
     save_set = {
                 'vm_tag', 'images_root', 'vm_root', 'vm_size', 'image_size', 'image_size_w', 'image_size_h', 'patch_size', 'perturbate', 'opacity_var',
-                'use_rgb', 'weight', 'shared_depth', 'num_blocks', 'batch_size', 'use_vm_decoder', 'rotate_vm',
+                'use_rgb', 'weight', 'shared_depth', 'num_blocks', 'batch_size', 'use_vm_decoder', 'rotate_vm', 'TDBmode'
                 'scale_vm', 'crop_vm', 'batch_vm', 'font', 'text_border', 'blur', 'dis_channels', 'gen_channels', 'dilation_depth'
                 }
     to_save = False
@@ -242,19 +242,20 @@ def init_loaders(opt, cache_root='', ds='IC15'):
     return _train_data_loader, _test_data_loader
 
 
-def init_nets(opt, net_path, device, tag='', para=False):
+def init_nets(opt, net_path, device, tag='', para=True):
     # net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder,
     #                              blocks=opt.num_blocks)
     net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder, blocks=opt.num_blocks)
     if para:
-        net_baseline = nn.DataParallel(net_baseline, device_ids=[0,1])
+        net_baseline = net_baseline.to(0)
+        net_baseline = nn.DataParallel(net_baseline, device_ids=[0,1], output_device=0)
     if tag != '':
         tag = '_' + str(tag)
     cur_path = '%s/net_baseline%s.pth' % (net_path, tag)
     if os.path.isfile(cur_path) and eval('net_baseline') is not None:
         print('loading baseline from %s/' % net_path)
-        net_baseline.load_state_dict(torch.load(cur_path, map_location=torch.device('cpu')))
-    net_baseline = net_baseline.to(device)
+        net_baseline.load_state_dict(torch.load(cur_path))
+    
     return net_baseline
 
 
@@ -273,7 +274,7 @@ def save_test_images(net, loader, image_name, device):
         output = net(synthesized)
         # print(output[0].shape)
         # exit(-1)
-        guess_images, guess_mask = output[0], output[3]
+        guess_images, guess_mask = output[0], output[-1]
         # print(guess_mask)
         expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
         print(torch.mean(guess_images, (0,2,3)))

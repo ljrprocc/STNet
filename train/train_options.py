@@ -32,3 +32,4 @@ class TrainOptions:
         self.gen_channels = None
         self.dilation_depth = None
         self.gen_only = True
+        self.TDBmode = True

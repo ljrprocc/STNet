@@ -6,7 +6,7 @@ from networks.unet_deeper import UnetEncoderD, UnetDecoderD
 class UnetBaselineD(nn.Module):
 
     def __init__(self, in_channels=3, depth=5, shared_depth=0, use_vm_decoder=False, blocks=1,
-                 out_channels_image=3, out_channels_mask=1, start_filters=16, residual=True, batch_norm=True,
+                 out_channels_image=3, out_channels_mask=1, start_filters=32, residual=True, batch_norm=True,
                  transpose=True, concat=True, transfer_data=True):
         super(UnetBaselineD, self).__init__()
         self.transfer_data = transfer_data

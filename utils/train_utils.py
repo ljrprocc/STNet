@@ -242,20 +242,21 @@ def init_loaders(opt, cache_root='', ds='IC15'):
     return _train_data_loader, _test_data_loader
 
 
-def init_nets(opt, net_path, device, tag='', para=True):
+def init_nets(opt, net_path, device, tag='', para=False):
     # net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder,
     #                              blocks=opt.num_blocks)
     net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder, blocks=opt.num_blocks)
     if para:
         net_baseline = net_baseline.to(0)
         net_baseline = nn.DataParallel(net_baseline, device_ids=[0,1], output_device=0)
-    if tag != '':
-        tag = '_' + str(tag)
+    # if tag != '':
+    #     tag = '_' + str(tag)
     cur_path = '%s/net_baseline%s.pth' % (net_path, tag)
-    if os.path.isfile(cur_path) and eval('net_baseline') is not None:
+    print(cur_path)
+    if os.path.isfile(cur_path):
         print('loading baseline from %s/' % net_path)
         net_baseline.load_state_dict(torch.load(cur_path))
-    
+    net_baseline = net_baseline.to(device)
     return net_baseline
 
 

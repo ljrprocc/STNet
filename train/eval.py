@@ -16,7 +16,7 @@ from utils.text_utils import run_boxes
 from networks.gan_model import *
 import tqdm
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:1')
 
 root_path = '..'
 train_tag = 'icdar_total_256'
@@ -32,7 +32,7 @@ dilation_depth= 0
 criterion = nn.MSELoss()
 
 # datasets paths
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280/']
 
 def cal_psnr(reconstructed_images, ori):
     mse = criterion(reconstructed_images, ori)

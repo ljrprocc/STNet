@@ -10,17 +10,17 @@ import multiprocessing
 # paths
 root_path = '..'
 # train_tag = 'coco_gan'
-# train_tag = 'icdar_total'
-train_tag = 'demo_msra_1'
+train_tag = 'icdar_total1x'
+# train_tag = 'demo_msra_1'
 
 # datasets paths
 # cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280/']
-cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_1x/']
+# cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
 patch_size = 256
-image_size_w = 960
+image_size_w = 1280
 image_size_h = 720
 
 # network
@@ -38,19 +38,19 @@ dilation_depth = 0
 TDBmode = True
 
 # train configurations
-gamma1 = 0.2   # L1 image
+gamma1 = 2   # L1 image
 gamma2 = 1   # L1 visual motif
 gamma3 = 10  # L1 style loss
 gamma4 = 0.02 # Perceptual
-gamma5 = 1   # L1 valid
+gamma5 = 3   # L1 valid
 gamma_dis = 0.5
 gamma_gen = 5
 gamma_coarse = 1
 gamma_coarse_hole = 0.2
-epochs = 1500
-batch_size = 24
-print_frequency = 2
-save_frequency = 150
+epochs = 1000
+batch_size = 16
+print_frequency = 10
+save_frequency = 100
 device = torch.device('cuda:0')
 
 def l1_relative(reconstructed, real, batch, area):
@@ -74,8 +74,8 @@ def dice_loss(guess_mask, vm_mask, dice_criterion, training_masks=None):
     loss = dice_criterion(guess_mask, vm_mask, selected_masks)
     return loss, selected_masks
 
-def train(nets, train_loader, test_loader):
-    net = nets.module
+def train(net, train_loader, test_loader):
+    # net = nets.module
     bce = nn.BCELoss()
     style = StyleLoss()
     per = PerceptionLoss()
@@ -87,11 +87,11 @@ def train(nets, train_loader, test_loader):
     D_losses = []
     G_losses = []
     start_epoch = 0
-    if start_epoch > 0:
-        net.load(start_epoch)
+    # if start_epoch > 0:
+    #     net.load(start_epoch)
     print('Training Begins')
     selected_masks = None
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         real_epoch = epoch + 1
         for i, data in enumerate(train_loader, 0):
             # exit(-1)
@@ -168,8 +168,8 @@ def train(nets, train_loader, test_loader):
             print("checkpointing...")
             image_name = '%s/%s_%d.png' % (images_path, train_tag, real_epoch)
             _ = save_test_images(net, test_loader, image_name, device)
-            if not os.path.exists('%s/epoch%d'%(nets_path, real_epoch)):
-                os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
+            # if not os.path.exists('%s/epoch%d'%(nets_path, real_epoch)):
+            #     os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
             if not TDBmode:
                 torch.save(net.generator.state_dict(), '%s/epoch%d/net_baseline_G.pth' % (nets_path, real_epoch))
                 torch.save(net.discriminator.state_dict(), '%s/epoch%d/net_baseline_D.pth' % (nets_path, real_epoch))
@@ -187,7 +187,7 @@ def run():
     opt = load_globals(nets_path, globals(), override=True)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
     # base_net = init_nets(opt, nets_path, device)
-    base_net = InpaintModel(opt, nets_path, device).to(device) if not TDBmode else init_nets(opt, nets_path, device)
+    base_net = InpaintModel(opt, nets_path, device).to(device) if not TDBmode else init_nets(opt, nets_path, device, tag='')
     train(base_net, train_loader, test_loader)
 
 

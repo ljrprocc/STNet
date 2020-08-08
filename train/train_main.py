@@ -10,12 +10,12 @@ import multiprocessing
 # paths
 root_path = '..'
 # train_tag = 'coco_gan'
-train_tag = 'icdar_total1x'
+train_tag = 'icdar_total3x_a'
 # train_tag = 'demo_msra_1'
 
 # datasets paths
 # cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_1x/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
 # cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
@@ -35,7 +35,7 @@ gen_only = True
 dis_channels = 32
 gen_channels = 24
 dilation_depth = 0
-TDBmode = True
+TDBmode = False
 
 # train configurations
 gamma1 = 2   # L1 image
@@ -153,8 +153,9 @@ def train(net, train_loader, test_loader):
                 loss.backward()
                 net.step_all()
                 losses.append(loss.item())
-                # D_losses.append(dis_loss.item())
-                # G_losses.append(gen_loss.item())
+                if not TDBmode:
+                    D_losses.append(dis_loss.item())
+                    G_losses.append(gen_loss.item())
             # print
             if (i + 1) % print_frequency == 0:
                 if TDBmode:
@@ -166,10 +167,10 @@ def train(net, train_loader, test_loader):
         # savings
         if real_epoch % save_frequency == 0:
             print("checkpointing...")
-            image_name = '%s/%s_%d.png' % (images_path, train_tag, real_epoch)
+            image_name = '%s/%s_%d_fine.png' % (images_path, train_tag, real_epoch)
             _ = save_test_images(net, test_loader, image_name, device)
-            # if not os.path.exists('%s/epoch%d'%(nets_path, real_epoch)):
-            #     os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
+            if not TDBmode and not os.path.exists('%s/epoch%d'%(nets_path, real_epoch)):
+                os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
             if not TDBmode:
                 torch.save(net.generator.state_dict(), '%s/epoch%d/net_baseline_G.pth' % (nets_path, real_epoch))
                 torch.save(net.discriminator.state_dict(), '%s/epoch%d/net_baseline_D.pth' % (nets_path, real_epoch))
@@ -187,7 +188,7 @@ def run():
     opt = load_globals(nets_path, globals(), override=True)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
     # base_net = init_nets(opt, nets_path, device)
-    base_net = InpaintModel(opt, nets_path, device).to(device) if not TDBmode else init_nets(opt, nets_path, device, tag='')
+    base_net = InpaintModel(opt, nets_path, device, tag='1000').to(device) if not TDBmode else init_nets(opt, nets_path, device, tag='1000')
     train(base_net, train_loader, test_loader)
 
 

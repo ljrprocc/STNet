@@ -19,7 +19,7 @@ import tqdm
 device = torch.device('cuda:1')
 
 root_path = '..'
-train_tag = 'icdar_total_256'
+train_tag = 'icdar_total3x_a'
 
 nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
 
@@ -32,7 +32,7 @@ dilation_depth= 0
 criterion = nn.MSELoss()
 
 # datasets paths
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
 
 def cal_psnr(reconstructed_images, ori):
     mse = criterion(reconstructed_images, ori)
@@ -66,7 +66,7 @@ def test(test_loader, model, debug=False):
             # real_img = np.transpose(real_img, (1,2,0)) * 255
             # real_img = real_img[:, :, ::-1]
             # print(real_img)
-            run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
+            # run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
             expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
             reconstructed_pixels = guess_images * expanded_guess_mask
             reconstructed_images = img * (1 - expanded_guess_mask) + reconstructed_pixels
@@ -86,15 +86,15 @@ def test(test_loader, model, debug=False):
             # exit(-1)
 
     print('=====> Avg. PSNR: {:.4f} dB'.format(avg_psnr / len(test_loader)))
-    print('=====> Avg. SSIM: {:.4f} '.format(avg_ssim / len(test_loader)))
+    print('=====> Avg. SSIM: {:.6f} '.format(avg_ssim / len(test_loader)))
 
 
 def run():
     opt = load_globals(nets_path, globals(), override=True)
 
-    # base_net = init_nets(opt, nets_path, device)
-    base_net = InpaintModel(opt, nets_path, device).to(device)
-    base_net.load(500)
+    # base_net = init_nets(opt, nets_path, device, tag='700')
+    base_net = InpaintModel(opt, nets_path, device, tag='1000').to(device)
+    base_net.load(900)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
 
     test(test_loader, base_net, debug=True)
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     write_dir = '/home/jingru.ljr/checkpoints/result/%s'%(train_tag)
     vis_path = os.path.join(write_dir, 'vis/')
     res_path = os.path.join(write_dir, 'res/')
-    inpaint_path = os.path.join(write_dir, 'inpaint/')
+    inpaint_path = os.path.join(write_dir, 'inpaint_fine/')
     if not os.path.exists(write_dir):
         os.mkdir(write_dir)
     if not os.path.exists(vis_path):

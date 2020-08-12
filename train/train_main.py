@@ -10,17 +10,17 @@ import multiprocessing
 # paths
 root_path = '..'
 # train_tag = 'coco_gan'
-train_tag = 'icdar_total3x_a'
+train_tag = 'demo_coco'
 # train_tag = 'demo_msra_1'
 
 # datasets paths
-# cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
+cache_root = ['/data/jingru.ljr/COCO/syn_output/']
+# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_4x/']
 # cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
-patch_size = 256
-image_size_w = 1280
+patch_size = 128
+image_size_w = 640
 image_size_h = 720
 
 # network
@@ -35,7 +35,7 @@ gen_only = True
 dis_channels = 32
 gen_channels = 24
 dilation_depth = 0
-TDBmode = False
+TDBmode = True
 
 # train configurations
 gamma1 = 2   # L1 image
@@ -47,10 +47,10 @@ gamma_dis = 0.5
 gamma_gen = 5
 gamma_coarse = 1
 gamma_coarse_hole = 0.2
-epochs = 1000
+epochs = 50
 batch_size = 16
 print_frequency = 10
-save_frequency = 100
+save_frequency = 5
 device = torch.device('cuda:0')
 
 def l1_relative(reconstructed, real, batch, area):

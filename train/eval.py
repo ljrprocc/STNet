@@ -19,7 +19,7 @@ import tqdm
 device = torch.device('cuda:1')
 
 root_path = '..'
-train_tag = 'icdar_total3x_a'
+train_tag = 'icdar_total4x'
 
 nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
 
@@ -32,7 +32,7 @@ dilation_depth= 0
 criterion = nn.MSELoss()
 
 # datasets paths
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_4x/']
 
 def cal_psnr(reconstructed_images, ori):
     mse = criterion(reconstructed_images, ori)
@@ -94,7 +94,7 @@ def run():
 
     # base_net = init_nets(opt, nets_path, device, tag='700')
     base_net = InpaintModel(opt, nets_path, device, tag='1000').to(device)
-    base_net.load(900)
+    base_net.load(1000)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
 
     test(test_loader, base_net, debug=True)

@@ -275,7 +275,7 @@ def save_test_images(net, loader, image_name, device):
         output = net(synthesized)
         # print(output[0].shape)
         # exit(-1)
-        guess_images, guess_mask = output[0], output[3]
+        guess_images, guess_mask = output[0], output[-1]
         # print(guess_mask)
         expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
         print(torch.mean(guess_images, (0,2,3)))

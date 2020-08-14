@@ -51,6 +51,7 @@ epochs = 50
 batch_size = 16
 print_frequency = 10
 save_frequency = 5
+start_epoch = 30
 device = torch.device('cuda:0')
 
 def l1_relative(reconstructed, real, batch, area):
@@ -86,7 +87,6 @@ def train(net, train_loader, test_loader):
     losses = []
     D_losses = []
     G_losses = []
-    start_epoch = 0
     # if start_epoch > 0:
     #     net.load(start_epoch)
     print('Training Begins')
@@ -188,7 +188,7 @@ def run():
     opt = load_globals(nets_path, globals(), override=True)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
     # base_net = init_nets(opt, nets_path, device)
-    base_net = InpaintModel(opt, nets_path, device, tag='1000').to(device) if not TDBmode else init_nets(opt, nets_path, device, tag='1000')
+    base_net = InpaintModel(opt, nets_path, device, tag=str(start_epoch)).to(device) if not TDBmode else init_nets(opt, nets_path, device, tag=str(start_epoch))
     train(base_net, train_loader, test_loader)
 
 

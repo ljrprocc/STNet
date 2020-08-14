@@ -128,9 +128,9 @@ class IC15Loader(Dataset):
             syn_img = cv2.copyMakeBorder(syn_img, 0, height_padding, 0, width_padding, cv2.BORDER_CONSTANT)
             mask = cv2.copyMakeBorder(mask, 0, height_padding, 0, width_padding, cv2.BORDER_CONSTANT)
         area = np.sum(mask)
-        if not self.train and (h % 16 != 0 or w % 16 != 0):
-            print(ori_img_path)
-            print(ori_img.shape)
+        # if not self.train and (h % 16 != 0 or w % 16 != 0):
+        #     print(ori_img_path)
+        #     print(ori_img.shape)
         # print(area)
         # mask = np.stack([mask] * c, axis=2)
         # print(mask.shape)

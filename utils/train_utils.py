@@ -251,12 +251,14 @@ def init_nets(opt, net_path, device, tag='', para=False):
         net_baseline = nn.DataParallel(net_baseline, device_ids=[0,1], output_device=0)
     # if tag != '':
     #     tag = '_' + str(tag)
+    net_baseline = net_baseline.to(device)
     cur_path = '%s/net_baseline%s.pth' % (net_path, tag)
     print(cur_path)
     if os.path.isfile(cur_path):
         print('loading baseline from %s/' % net_path)
-        net_baseline.load_state_dict(torch.load(cur_path))
-    net_baseline = net_baseline.to(device)
+        net_baseline.load_state_dict(torch.load(cur_path, map_location=device))
+    # print(device)
+    
     return net_baseline
 
 
@@ -275,7 +277,7 @@ def save_test_images(net, loader, image_name, device):
         output = net(synthesized)
         # print(output[0].shape)
         # exit(-1)
-        guess_images, guess_mask = output[0], output[-1]
+        guess_images, guess_mask = output[0], output[3]
         # print(guess_mask)
         expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
         print(torch.mean(guess_images, (0,2,3)))

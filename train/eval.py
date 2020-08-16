@@ -32,6 +32,7 @@ dilation_depth= 0
 criterion = nn.MSELoss()
 
 # datasets paths
+# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
 cache_root = ['/data/jingru.ljr/COCO/syn_output/']
 
 def cal_psnr(reconstructed_images, ori):
@@ -55,7 +56,7 @@ def test(test_loader, model, debug=False):
             write_res_name = '%s/%s.txt'%(res_path, jpg_name[:-4])
             write_inpaint_path = '%s/%s'%(inpaint_path, jpg_name)
             
-            guess_images, guess_mask = output[0], output[-1]
+            guess_images, guess_mask = output[0], output[3]
             real_img = img.data.squeeze().cpu().numpy().copy()
             real_img = np.transpose(real_img, (1,2,0)) * [0.229, 0.224, 0.225] + [0.485, 0.456, 0.406]
             real_img = np.around(real_img * 255).astype("uint8")
@@ -66,7 +67,7 @@ def test(test_loader, model, debug=False):
             # real_img = np.transpose(real_img, (1,2,0)) * 255
             # real_img = real_img[:, :, ::-1]
             # print(real_img)
-            run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
+            # run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
             expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
             reconstructed_pixels = guess_images * expanded_guess_mask
             reconstructed_images = img * (1 - expanded_guess_mask) + reconstructed_pixels
@@ -92,9 +93,9 @@ def test(test_loader, model, debug=False):
 def run():
     opt = load_globals(nets_path, globals(), override=True)
 
-    base_net = init_nets(opt, nets_path, device, tag='30')
-    # base_net = InpaintModel(opt, nets_path, device, tag='1000').to(device)
-    # base_net.load(1000)
+    # base_net = init_nets(opt, nets_path, device, tag='30')
+    base_net = InpaintModel(opt, nets_path, device, tag='50').to(device)
+    base_net.load(50)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
 
     test(test_loader, base_net, debug=True)
@@ -104,7 +105,7 @@ if __name__ == '__main__':
     write_dir = '/data/jingru.ljr/AAAI2021/result/%s'%(train_tag)
     vis_path = os.path.join(write_dir, 'vis/')
     res_path = os.path.join(write_dir, 'res/')
-    inpaint_path = os.path.join(write_dir, 'inpaint/')
+    inpaint_path = os.path.join(write_dir, 'inpaint_fine/')
     if not os.path.exists(write_dir):
         os.mkdir(write_dir)
     if not os.path.exists(vis_path):

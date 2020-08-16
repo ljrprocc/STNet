@@ -19,6 +19,36 @@ def extract_image_patches(img, kernel, stride=1, dilation=1):
     patches = x.unfold(2, kernel, stride).unfold(3, kernel, stride)
     patches = patches.permute(0,4,5,1,2,3).contiguous()
     return patches.view(b, -1, patches.shape[-2], patches.shape[-1])
+
+class GateConv2d(nn.Conv2d):
+    def __init__(self, activation=None, *args, **kwargs):
+        super(GateConv2d, self).__init__(*args, **kwargs)
+        self.activation = activation
+
+    def forward(self, x):
+        x = F.conv2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        if self.out_channels == 3 or self.activation is None:
+            return x
+        x, y = torch.split(x, x.shape[1] // 2, dim=1)
+        x = self.activation(x)
+        y = torch.sigmoid(y)
+        x = x * y
+        return x
+
+class GateTransposed2d(nn.ConvTranspose2d):
+    def __init__(self, activation=None, *args, **kwargs):
+        super(GateTransposed2d, self).__init__(*args, **kwargs)
+        self.activation = activation
+
+    def forward(self, x):
+        x = F.conv_transpose2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        if self.out_channels == 3 or self.activation is None:
+            return x
+        x, y = torch.split(x, x.shape[1] // 2, dim=1)
+        x = self.activation(x)
+        y = torch.sigmoid(y)
+        x = x * y
+        return x
     
     
 class ContextAttention(nn.Module):
@@ -136,6 +166,73 @@ class ContextAttention(nn.Module):
         # exit(-1)
         return y, offsets
 
+class GatedCoarse2FineModel(nn.Module):
+    def __init__(self, hidden_channels=24):
+        super(GatedCoarse2FineModel, self).__init__()
+        self.gen_relu = nn.ELU(inplace=True)
+        self.hidden_channels = hidden_channels
+        self.relu = nn.ReLU(inplace=True)
+        self.build_inpaint_model()
+
+    def build_inpaint_model(self):
+        self.conv1s = []
+        self.bn1s = []
+        self.conv1s.append(GateConv2d(self.gen_relu, 3, self.hidden_channels * 2, 3, 2, padding=1))
+        self.bn1s.append(nn.InstanceNorm2d(self.hidden_channels))
+        self.conv1s.append(GateConv2d(self.gen_relu, self.hidden_channels, self.hidden_channels * 4, 3, 2, padding=1))
+        self.bn1s.append(nn.InstanceNorm2d(self.hidden_channels * 2))
+        self.conv1s = nn.ModuleList(self.conv1s)
+        self.bn1s = nn.ModuleList(self.bn1s)
+        self.conv2s = []
+        self.bn2s = []
+        self.conv2s.append(GateConv2d(self.gen_relu, 3, self.hidden_channels * 2, 3, 2, padding=1))
+        self.bn2s.append(nn.InstanceNorm2d(self.hidden_channels))
+        self.conv2s.append(GateConv2d(self.relu, self.hidden_channels, self.hidden_channels * 4, 3, 2, padding=1))
+        self.bn2s.append(nn.InstanceNorm2d(self.hidden_channels * 2))
+        self.conv2s.append(ContextAttention(ksize=3, stride=1, rate=2))
+        self.conv2s = nn.ModuleList(self.conv2s)
+        self.bn2s = nn.ModuleList(self.bn2s)
+        self.total_conv = []
+        self.total_bn = []
+        self.total_conv.append(GateConv2d(self.gen_relu, self.hidden_channels * 4, self.hidden_channels * 4, 3, 1, padding=1))
+        self.total_bn.append(nn.InstanceNorm2d(self.hidden_channels * 2))
+        self.total_conv.append(GateTransposed2d(self.gen_relu, self.hidden_channels * 2, self.hidden_channels * 2, 3, 2, padding=1))
+        self.total_bn.append(nn.InstanceNorm2d(self.hidden_channels))
+        self.total_conv.append(GateTransposed2d(self.gen_relu, self.hidden_channels, self.hidden_channels, 3, 2, padding=1))
+        self.total_bn.append(nn.InstanceNorm2d(self.hidden_channels // 2))
+        self.total_conv.append(GateConv2d(None, self.hidden_channels // 2, 3, 3, 1, padding=1))
+        self.total_conv = nn.ModuleList(self.total_conv)
+        self.total_bn = nn.ModuleList(self.total_bn)
+    
+    def forward(self, x, xori, mask=None):
+        x1 = x * mask.repeat(1,3,1,1) + xori * (1. - mask.repeat(1,3,1,1))
+        xnow = x1
+        for i, conv in enumerate(self.conv1s):
+            # print(x1.shape)
+            x1 = conv(x1)
+            x1 = self.bn1s[i](x1)
+            # x1 = self.gen_relu(x1)
+            # print(x1.shape)
+        x2 = xnow
+        offsets = None
+        mask_s = F.interpolate(mask, size=(x1.shape[2], x1.shape[3]))
+        for i, conv in enumerate(self.conv2s):
+            if i == len(self.conv2s) - 1:
+                x2, offsets = conv(x2, x2, mask=mask_s)
+            else:
+                x2 = conv(x2)
+                x2 = self.bn2s[i](x2)
+            # x2 = self.gen_relu(x2) if i != 1 else self.relu(x2)
+        x = torch.cat([x1, x2], 1)
+        for i, conv in enumerate(self.total_conv):
+            x = conv(x)
+            if i < len(self.total_conv) - 1:
+                x = self.total_bn[i](x)
+                # print(x.shape)
+                # x = self.gen_relu(x)
+        x = torch.tanh(x)
+        return x, offsets
+
 class TinyCoarse2FineModel(nn.Module):
     def __init__(self, hidden_channels=48):
         super(TinyCoarse2FineModel, self).__init__()
@@ -183,9 +280,10 @@ class TinyCoarse2FineModel(nn.Module):
             x1 = self.gen_relu(x1)
         x2 = xnow
         offsets = None
+        mask_s = F.interpolate(mask, size=(x1.shape[2], x1.shape[3]))
         for i, conv in enumerate(self.conv2s):
             if i == len(self.conv2s) - 1:
-                x2, offsets = conv(x2, x2, mask=mask)
+                x2, offsets = conv(x2, x2, mask=mask_s)
             else:
                 x2 = conv(x2)
                 x2 = self.bn2s[i](x2)

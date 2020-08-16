@@ -36,18 +36,20 @@ class Discriminator(nn.Module):
 
 
 class InpaintModel(nn.Module):
-    def __init__(self, opt, net_path, device, tag='', gen_only=True):
+    def __init__(self, opt, net_path, device, tag='', gen_only=True, gate=False):
         super(InpaintModel, self).__init__()
         self.adversial_loss = AdversialLoss(type='nsgan')
         self.discriminator = Discriminator(opt.dis_channels)
         self.mask_generator = init_nets(opt, net_path, device, tag)
-        self.generator = Coarse2FineModel(opt.gen_channels)
-
+        self.generator = TinyCoarse2FineModel(opt.gen_channels) if not gate else GatedCoarse2FineModel(opt.gen_channels)
+        self.gate = gate
         # print(self.generator)
         self.gen_only = gen_only
         self.net_path = net_path
         self.tag = tag
         self.device = device
+        # if tag != '':
+        #     self.load(int(tag))
 
     def update_device(self, device):
         self.discriminator = self.discriminator.to(device)
@@ -58,6 +60,7 @@ class InpaintModel(nn.Module):
         results_mask_gen = self.mask_generator(x)
         corase_image, result_mask = results_mask_gen[0], results_mask_gen[1]
         x_out, offsests = self.generator(corase_image, xori=x, mask=result_mask)
+        hard_mask = (result_mask.repeat(1,3,1,1) > 0.9).int()
         fine_image = x_out * result_mask.repeat(1,3,1,1) + x * (1 - result_mask.repeat(1,3,1,1))
         # print(x_out[0][:, :, 0].mean(), x_out[0][:, :, 1].mean(), x_out[0][:, :, 2].mean())
         gen_loss = 0.
@@ -123,9 +126,11 @@ class InpaintModel(nn.Module):
                 para.requires_grad = False
 
     def load(self, epoch):
-        pathD = '%s/epoch%d/net_baseline_D.pth' % (self.net_path, epoch)
-        pathG = '%s/epoch%d/net_baseline_G.pth' % (self.net_path, epoch)
+        appendix = 'g' if self.gate else ''
+        pathD = '%s/epoch%d/net_baseline_%sD.pth' % (self.net_path, epoch, appendix)
+        pathG = '%s/epoch%d/net_baseline_%sG.pth' % (self.net_path, epoch, appendix)
         print('Loading parameters of generator....')
+        print(pathD)
         self.generator.load_state_dict(torch.load(pathG))
         print('Loading parameters of discriminator...')
         self.discriminator.load_state_dict(torch.load(pathD))

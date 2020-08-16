@@ -6,20 +6,22 @@ from utils.train_utils import *
 from train.eval import *
 from torch import nn
 import multiprocessing
-
+import torch
+# torch.cuda.set_device(1)
+device = torch.device('cuda:1')
 # paths
 root_path = '..'
-# train_tag = 'coco_gan'
-train_tag = 'demo_coco'
+# train_tag = 'demo_coco'
+train_tag = 'icdar_total2x'
 # train_tag = 'demo_msra_1'
 
 # datasets paths
-cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_4x/']
+# cache_root = ['/data/jingru.ljr/COCO/syn_output/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2xa/']
 # cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
-patch_size = 128
+patch_size = 256
 image_size_w = 640
 image_size_h = 720
 
@@ -32,10 +34,10 @@ shared_depth = 2
 use_vm_decoder = False
 use_rgb = True
 gen_only = True
-dis_channels = 32
-gen_channels = 24
+dis_channels = 64
+gen_channels = 48
 dilation_depth = 0
-TDBmode = True
+TDBmode = False
 
 # train configurations
 gamma1 = 2   # L1 image
@@ -44,15 +46,15 @@ gamma3 = 10  # L1 style loss
 gamma4 = 0.02 # Perceptual
 gamma5 = 3   # L1 valid
 gamma_dis = 0.5
-gamma_gen = 5
+gamma_gen = 20
 gamma_coarse = 1
 gamma_coarse_hole = 0.2
-epochs = 50
-batch_size = 16
+epochs = 1500
+batch_size = 32
 print_frequency = 10
-save_frequency = 5
-start_epoch = 30
-device = torch.device('cuda:0')
+save_frequency = 100
+start_epoch = 0
+
 
 def l1_relative(reconstructed, real, batch, area):
     loss_l1 = torch.abs(reconstructed - real).view(batch, -1)
@@ -188,7 +190,7 @@ def run():
     opt = load_globals(nets_path, globals(), override=True)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
     # base_net = init_nets(opt, nets_path, device)
-    base_net = InpaintModel(opt, nets_path, device, tag=str(start_epoch)).to(device) if not TDBmode else init_nets(opt, nets_path, device, tag=str(start_epoch))
+    base_net = InpaintModel(opt, nets_path, device, tag='1000', gate=True).to(device) if not TDBmode else init_nets(opt, nets_path, device, tag=str(start_epoch))
     train(base_net, train_loader, test_loader)
 
 

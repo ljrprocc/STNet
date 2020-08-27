@@ -16,10 +16,11 @@ from utils.text_utils import run_boxes
 from networks.gan_model import *
 import tqdm
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:1')
 
 root_path = '..'
-train_tag = 'demo_coco'
+# train_tag = 'demo_coco'
+train_tag = 'demo_msra_1'
 
 nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
 
@@ -32,8 +33,9 @@ dilation_depth= 0
 criterion = nn.MSELoss()
 
 # datasets paths
-# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
-cache_root = ['/data/jingru.ljr/COCO/syn_output/']
+# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/']
+# cache_root = ['/data/jingru.ljr/COCO/syn_output/']
+cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 def cal_psnr(reconstructed_images, ori):
     mse = criterion(reconstructed_images, ori)
@@ -93,9 +95,9 @@ def test(test_loader, model, debug=False):
 def run():
     opt = load_globals(nets_path, globals(), override=True)
 
-    # base_net = init_nets(opt, nets_path, device, tag='30')
-    base_net = InpaintModel(opt, nets_path, device, tag='50').to(device)
-    base_net.load(50)
+    # base_net = init_nets(opt, nets_path, device, tag='3000')
+    base_net = InpaintModel(opt, nets_path, device, tag='3000').to(device)
+    base_net.load(1800)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
 
     test(test_loader, base_net, debug=True)

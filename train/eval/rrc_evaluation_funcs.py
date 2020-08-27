@@ -60,6 +60,7 @@ def load_zip_file(file,fileNameRegExp='',allEntries=False):
 
     pairs = []
     for name in archive.namelist():
+        # print(name)
         addFile = True
         keyName = name
         if fileNameRegExp!="":

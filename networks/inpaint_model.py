@@ -100,7 +100,7 @@ class ContextAttention(nn.Module):
         # exit(-1)
         # m = m[0]
         # print(mask.shape)
-        mms = (torch.mean(1 - m, dim=(1,2,3)) < 0.9).float().to(f.device)
+        mms = (torch.mean(1 - m, dim=(1,2,3)) < 0.85).float().to(f.device)
 
         w_groups = torch.chunk(w, bs, dim=0)
         raw_w_groups = torch.chunk(raw_w, bs, dim=0)

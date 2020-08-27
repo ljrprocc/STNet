@@ -38,7 +38,7 @@ class Discriminator(nn.Module):
 class InpaintModel(nn.Module):
     def __init__(self, opt, net_path, device, tag='', gen_only=True, gate=False):
         super(InpaintModel, self).__init__()
-        self.adversial_loss = AdversialLoss(type='nsgan')
+        self.adversial_loss = AdversialLoss(type='lsgan')
         self.discriminator = Discriminator(opt.dis_channels)
         self.mask_generator = init_nets(opt, net_path, device, tag)
         self.generator = TinyCoarse2FineModel(opt.gen_channels) if not gate else GatedCoarse2FineModel(opt.gen_channels)

@@ -12,17 +12,17 @@ device = torch.device('cuda:1')
 # paths
 root_path = '..'
 # train_tag = 'demo_coco'
-train_tag = 'icdar_total2x'
-# train_tag = 'demo_msra_1'
+# train_tag = 'icdar_total2x'
+train_tag = 'demo_msra_1'
 
 # datasets paths
 # cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2xa/']
-# cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
+# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2xa/']
+cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
 patch_size = 256
-image_size_w = 640
+image_size_w = 960
 image_size_h = 720
 
 # network
@@ -45,14 +45,15 @@ gamma2 = 1   # L1 visual motif
 gamma3 = 10  # L1 style loss
 gamma4 = 0.02 # Perceptual
 gamma5 = 3   # L1 valid
-gamma_dis = 0.5
+gamma_dis = 0.7
+
 gamma_gen = 20
 gamma_coarse = 1
-gamma_coarse_hole = 0.2
-epochs = 1500
-batch_size = 32
-print_frequency = 10
-save_frequency = 100
+gamma_coarse_hole = 0.2 
+epochs = 3000
+batch_size = 16
+print_frequency = 2
+save_frequency = 300
 start_epoch = 0
 
 
@@ -169,7 +170,7 @@ def train(net, train_loader, test_loader):
         # savings
         if real_epoch % save_frequency == 0:
             print("checkpointing...")
-            image_name = '%s/%s_%d_fine.png' % (images_path, train_tag, real_epoch)
+            image_name = '%s/%s_%d_fines.png' % (images_path, train_tag, real_epoch)
             _ = save_test_images(net, test_loader, image_name, device)
             if not TDBmode and not os.path.exists('%s/epoch%d'%(nets_path, real_epoch)):
                 os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
@@ -190,7 +191,10 @@ def run():
     opt = load_globals(nets_path, globals(), override=True)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
     # base_net = init_nets(opt, nets_path, device)
-    base_net = InpaintModel(opt, nets_path, device, tag='1000', gate=True).to(device) if not TDBmode else init_nets(opt, nets_path, device, tag=str(start_epoch))
+    pretrain_path = '%s/checkpoints/demo_coco/' % (root_path)
+    base_net = InpaintModel(opt, nets_path, device, tag='3000').to(device) if not TDBmode else init_nets(opt, nets_path, device, tag='1500')
+    # if not TDBmode:
+    #     base_net.load(35)
     train(base_net, train_loader, test_loader)
 
 

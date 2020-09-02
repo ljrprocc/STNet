@@ -8,7 +8,7 @@ from torch import nn
 import multiprocessing
 import torch
 # torch.cuda.set_device(1)
-device = torch.device('cuda:1')
+device = torch.device('cuda:0')
 # paths
 root_path = '..'
 # train_tag = 'demo_coco'
@@ -40,11 +40,11 @@ dilation_depth = 0
 TDBmode = False
 
 # train configurations
-gamma1 = 2   # L1 image
+gamma1 = 3   # L1 image
 gamma2 = 1   # L1 visual motif
 gamma3 = 10  # L1 style loss
 gamma4 = 0.02 # Perceptual
-gamma5 = 3   # L1 valid
+gamma5 = 0.5   # L1 valid
 gamma_dis = 0.7
 
 gamma_gen = 20

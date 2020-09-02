@@ -41,7 +41,7 @@ class InpaintModel(nn.Module):
         self.adversial_loss = AdversialLoss(type='lsgan')
         self.discriminator = Discriminator(opt.dis_channels)
         self.mask_generator = init_nets(opt, net_path, device, tag)
-        self.generator = TinyCoarse2FineModel(opt.gen_channels) if not gate else GatedCoarse2FineModel(opt.gen_channels)
+        self.generator = Coarse2FineModel(opt.gen_channels) if not gate else GatedCoarse2FineModel(opt.gen_channels)
         self.gate = gate
         # print(self.generator)
         self.gen_only = gen_only

@@ -42,9 +42,9 @@ def cal_psnr(reconstructed_images, ori):
     psnr = 10 * math.log10(1 / mse.item())
     return psnr
 
-def test(test_loader, model, debug=False):
-    avg_psnr = 0
-    avg_ssim = 0
+def test(test_loader, model, debug=False, baseline=False):
+    avg_psnr = [0., 0.]
+    avg_ssim = [0., 0.]
     with torch.no_grad():
         for i, batch in tqdm.tqdm(enumerate(test_loader)):
             img, ori = batch[0].to(device), batch[1].to(device)
@@ -75,6 +75,7 @@ def test(test_loader, model, debug=False):
             reconstructed_images = img * (1 - expanded_guess_mask) + reconstructed_pixels
             transformed_guess_mask = expanded_guess_mask * 2 - 1
             ssim_val = ssim(ori, reconstructed_images, data_range=255, size_average=False)
+            ssim_baseline = ssim(ori, img, data_range=255, size_average=False)
             if debug:
                 images_un = torch.cat((ori, img, reconstructed_images, transformed_guess_mask), 0)
                 images_un = torch.clamp(images_un.data, min=-1, max=1)
@@ -84,12 +85,15 @@ def test(test_loader, model, debug=False):
                 # exit(-1)
             
             psnr = cal_psnr(reconstructed_images, ori)
-            avg_ssim += ssim_val.item()
-            avg_psnr += psnr
+            psnr_baseline = cal_psnr(img, ori)
+            avg_ssim[0] += ssim_val.item()
+            avg_psnr[0] += psnr
+            avg_ssim[1] += ssim_baseline.item()
+            avg_psnr[1] += psnr_baseline
             # exit(-1)
 
-    print('=====> Avg. PSNR: {:.4f} dB'.format(avg_psnr / len(test_loader)))
-    print('=====> Avg. SSIM: {:.6f} '.format(avg_ssim / len(test_loader)))
+    print('=====> Avg. PSNR: {:.4f} dB, baseline: {:.4f} dB'.format(avg_psnr[0] / len(test_loader), avg_psnr[1] / len(test_loader)))
+    print('=====> Avg. SSIM: {:.6f}, baseline: {:.6f}'.format(avg_ssim / len(test_loader), avg_ssim[1] / len(test_loader)))
 
 
 def run():
@@ -97,7 +101,7 @@ def run():
 
     # base_net = init_nets(opt, nets_path, device, tag='3000')
     base_net = InpaintModel(opt, nets_path, device, tag='3000').to(device)
-    base_net.load(1800)
+    base_net.load(2100)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
 
     test(test_loader, base_net, debug=True)

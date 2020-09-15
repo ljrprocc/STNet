@@ -61,7 +61,7 @@ def run():
 
 if __name__ == '__main__':
     # img_dir = '/data/jingru.ljr/COCO/syn_output/val_syn/000000001503.jpg'
-    img_dir = '/home/jingru.ljr/checkpoints/demo_coco/test1503.jpg'
+    img_dir = '/home/jingru.ljr/Motif-Removal/aa.jpg'
     run()
 
 

@@ -20,7 +20,8 @@ device = torch.device('cuda:1')
 
 root_path = '..'
 # train_tag = 'demo_coco'
-train_tag = 'demo_msra_1'
+# train_tag = 'demo_msra_1'
+train_tag = 'icdar_total3x_a'
 
 nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
 
@@ -29,17 +30,20 @@ shared_depth = 2
 use_vm_decoder = False
 use_rgb = True
 dilation_depth= 0
+dis_channels=64
+gen_channels=48
+batch_size=16
 
 criterion = nn.MSELoss()
 
 # datasets paths
-# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2x/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
 # cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
+# cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 def cal_psnr(reconstructed_images, ori):
     mse = criterion(reconstructed_images, ori)
-    psnr = 10 * math.log10(1 / mse.item())
+    psnr = 10 * math.log10(1 / (mse.item() + 1e-8))
     return psnr
 
 def test(test_loader, model, debug=False, baseline=False):
@@ -93,18 +97,18 @@ def test(test_loader, model, debug=False, baseline=False):
             # exit(-1)
 
     print('=====> Avg. PSNR: {:.4f} dB, baseline: {:.4f} dB'.format(avg_psnr[0] / len(test_loader), avg_psnr[1] / len(test_loader)))
-    print('=====> Avg. SSIM: {:.6f}, baseline: {:.6f}'.format(avg_ssim / len(test_loader), avg_ssim[1] / len(test_loader)))
+    print('=====> Avg. SSIM: {:.6f}, baseline: {:.6f}'.format(avg_ssim[0] / len(test_loader), avg_ssim[1] / len(test_loader)))
 
 
 def run():
     opt = load_globals(nets_path, globals(), override=True)
 
     # base_net = init_nets(opt, nets_path, device, tag='3000')
-    base_net = InpaintModel(opt, nets_path, device, tag='3000').to(device)
-    base_net.load(2100)
+    base_net = InpaintModel(opt, nets_path, device, tag='1000', gate=False).to(device)
+    base_net.load(1000)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
 
-    test(test_loader, base_net, debug=True)
+    test(test_loader, base_net)
 
 if __name__ == '__main__':
     multiprocessing.set_start_method('spawn', force=True)

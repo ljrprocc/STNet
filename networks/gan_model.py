@@ -31,7 +31,7 @@ class Discriminator(nn.Module):
             if not conv.out_channels == 1:
                 x = self.relu(x)
         out = self.flatten(x)
-        out = torch.sigmoid(out)
+        # out = torch.sigmoid(out)
         return out
 
 

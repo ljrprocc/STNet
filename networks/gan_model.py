@@ -6,6 +6,28 @@ import torch.optim as optim
 
 from networks.inpaint_model import *
 from utils.train_utils import *
+# from networks.baselines import weight_init
+
+def weight_init(init_type='gaussian'):
+    def init_fun(m):
+        classname = m.__class__.__name__
+        if (classname.find('Conv') == 0 or classname.find(
+                'Linear') == 0) and hasattr(m, 'weight'):
+            if init_type == 'gaussian':
+                init.normal_(m.weight.data, 0.0, 0.02)
+            elif init_type == 'xavier':
+                init.xavier_normal_(m.weight.data, gain=math.sqrt(2))
+            elif init_type == 'kaiming':
+                init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+            elif init_type == 'orthogonal':
+                init.orthogonal_(m.weight.data, gain=math.sqrt(2))
+            elif init_type == 'default':
+                pass
+            else:
+                assert 0, "Unsupported initialization: {}".format(init_type)
+            if hasattr(m, 'bias') and m.bias is not None:
+                init.constant_(m.bias.data, 0.0)
+    return init_fun
 
 class Discriminator(nn.Module):
     def __init__(self, hidden_channels=64):
@@ -28,7 +50,7 @@ class Discriminator(nn.Module):
             # print(x.shape)
             x = conv(x)
             # print(x.shape)
-            if not conv.out_channels == 1:
+            if conv.out_channels != 1:
                 x = self.relu(x)
         out = self.flatten(x)
         # out = torch.sigmoid(out)
@@ -38,7 +60,7 @@ class Discriminator(nn.Module):
 class InpaintModel(nn.Module):
     def __init__(self, opt, net_path, device, tag='', gen_only=True, gate=False):
         super(InpaintModel, self).__init__()
-        self.adversial_loss = AdversialLoss(type='lsgan')
+        self.adversial_loss = AdversialLoss('lsgan')
         self.discriminator = Discriminator(opt.dis_channels)
         self.mask_generator = init_nets(opt, net_path, device, tag)
         self.generator = Coarse2FineModel(opt.gen_channels) if not gate else GatedCoarse2FineModel(opt.gen_channels)
@@ -48,6 +70,7 @@ class InpaintModel(nn.Module):
         self.net_path = net_path
         self.tag = tag
         self.device = device
+        self.set_optimizers(tag=='')
         # if tag != '':
         #     self.load(int(tag))
 
@@ -56,35 +79,43 @@ class InpaintModel(nn.Module):
         self.mask_generator = self.mask_generator.to(device)
         self.generator = self.generator.to(device)
 
-    def forward(self, x):
-        results_mask_gen = self.mask_generator(x)
-        corase_image, result_mask = results_mask_gen[0], results_mask_gen[1]
-        x_out, offsests = self.generator(corase_image, xori=x, mask=result_mask)
+    def forward(self, x, update='gen'):
+        assert update in ['gen', 'dis']
+        with torch.no_grad():
+            results_mask_gen = self.mask_generator(x)
+            corase_image, result_mask = results_mask_gen[0], results_mask_gen[1]
+        if update == 'gen':    
+            x_out, offsests = self.generator(corase_image, xori=x, mask=result_mask)
+        else:
+            with torch.no_grad():
+                x_out, offsests = self.generator(corase_image, xori=x, mask=result_mask)
         hard_mask = (result_mask.repeat(1,3,1,1) > 0.9).int()
         fine_image = x_out * result_mask.repeat(1,3,1,1) + x * (1 - result_mask.repeat(1,3,1,1))
         # print(x_out[0][:, :, 0].mean(), x_out[0][:, :, 1].mean(), x_out[0][:, :, 2].mean())
         gen_loss = 0.
         dis_loss = 0.
+        if update=='dis':
         # discriminator loss
-        dis_input_real = x * result_mask.repeat(1,3,1,1)
-        # dis_input_fake = fine_image.detach()
-        dis_input_fake = fine_image.detach() * result_mask.repeat(1,3,1,1)
-        dis_real = self.discriminator(dis_input_real)
-        dis_fake = self.discriminator(dis_input_fake)
-        # print(dis_fake)
-        dis_real_loss = self.adversial_loss(dis_real, True, True)
-        dis_fake_loss = self.adversial_loss(dis_fake, False, True)
-        # print(dis_real_loss, dis_fake_loss)
-        dis_loss += (dis_real_loss + dis_fake_loss) / 2
-
+            dis_input_real = x
+            # dis_input_fake = fine_image.detach()
+            dis_input_fake = fine_image.detach()
+            dis_real = self.discriminator(dis_input_real)
+            dis_fake = self.discriminator(dis_input_fake)
+            # print(dis_fake)
+            dis_real_loss = self.adversial_loss(dis_real, True, True)
+            dis_fake_loss = self.adversial_loss(dis_fake, False, True)
+            # print(dis_real_loss, dis_fake_loss)
+            dis_loss += (dis_real_loss + dis_fake_loss) / 2
+        else:
         # generator gan loss
-        gen_input_fake = fine_image
-        gen_fake = self.discriminator(gen_input_fake)
+            gen_input_fake = fine_image
+            with torch.no_grad():
+                gen_fake = self.discriminator(gen_input_fake.detach())
         # print(dis_real.mean(), dis_fake.mean(), gen_fake.mean())
         # exit(-1)
-        gen_gan_loss = self.adversial_loss(gen_fake, True, False)
-        # print(gen_gan_loss)
-        gen_loss += gen_gan_loss
+            gen_gan_loss = self.adversial_loss(gen_fake, True, False)
+            # print(gen_gan_loss)
+            gen_loss += gen_gan_loss
         # print(fine_image.shape)
 
         return x_out, gen_loss, dis_loss, result_mask, corase_image
@@ -101,7 +132,7 @@ class InpaintModel(nn.Module):
         if not self.gen_only:
             self.mask_generator.step_all()
 
-    def set_optimizers(self):
+    def set_optimizers(self, init=True):
         self.dis_optimzer = optim.Adam(
             params = self.discriminator.parameters(),
             lr = 0.001,
@@ -124,6 +155,8 @@ class InpaintModel(nn.Module):
 
             for para in self.mask_generator.encoder.parameters():
                 para.requires_grad = False
+        if init:
+            self.apply(weight_init('kaiming'))
 
     def load(self, epoch):
         appendix = 'g' if self.gate else ''

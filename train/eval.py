@@ -16,12 +16,12 @@ from utils.text_utils import run_boxes
 from networks.gan_model import *
 import tqdm
 
-device = torch.device('cuda:1')
+device = torch.device('cuda:0')
 
 root_path = '..'
 # train_tag = 'demo_coco'
 # train_tag = 'demo_msra_1'
-train_tag = 'icdar_total3x_a'
+train_tag = 'icdar_total3x_style'
 
 nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
 
@@ -62,7 +62,7 @@ def test(test_loader, model, debug=False, baseline=False):
             write_res_name = '%s/%s.txt'%(res_path, jpg_name[:-4])
             write_inpaint_path = '%s/%s'%(inpaint_path, jpg_name)
             
-            guess_images, guess_mask = output[0], output[3]
+            guess_images, guess_mask = output[0], output[-1]
             real_img = img.data.squeeze().cpu().numpy().copy()
             real_img = np.transpose(real_img, (1,2,0)) * [0.229, 0.224, 0.225] + [0.485, 0.456, 0.406]
             real_img = np.around(real_img * 255).astype("uint8")
@@ -73,13 +73,13 @@ def test(test_loader, model, debug=False, baseline=False):
             # real_img = np.transpose(real_img, (1,2,0)) * 255
             # real_img = real_img[:, :, ::-1]
             # print(real_img)
-            # run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
+            run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
             expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
             reconstructed_pixels = guess_images * expanded_guess_mask
             reconstructed_images = img * (1 - expanded_guess_mask) + reconstructed_pixels
             transformed_guess_mask = expanded_guess_mask * 2 - 1
-            ssim_val = ssim(ori, reconstructed_images, data_range=255, size_average=False)
-            ssim_baseline = ssim(ori, img, data_range=255, size_average=False)
+            ssim_val = ms_ssim(ori, reconstructed_images, data_range=255, size_average=False)
+            ssim_baseline = ms_ssim(ori, img, data_range=255, size_average=False)
             if debug:
                 images_un = torch.cat((ori, img, reconstructed_images, transformed_guess_mask), 0)
                 images_un = torch.clamp(images_un.data, min=-1, max=1)
@@ -103,9 +103,9 @@ def test(test_loader, model, debug=False, baseline=False):
 def run():
     opt = load_globals(nets_path, globals(), override=True)
 
-    # base_net = init_nets(opt, nets_path, device, tag='3000')
-    base_net = InpaintModel(opt, nets_path, device, tag='1000', gate=False).to(device)
-    base_net.load(1000)
+    base_net = init_nets(opt, nets_path, device, tag='1200')
+    # base_net = InpaintModel(opt, nets_path, device, tag='1500', gate=False).to(device)
+    # base_net.load(1000)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
 
     test(test_loader, base_net)
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     write_dir = '/data/jingru.ljr/AAAI2021/result/%s'%(train_tag)
     vis_path = os.path.join(write_dir, 'vis/')
     res_path = os.path.join(write_dir, 'res/')
-    inpaint_path = os.path.join(write_dir, 'inpaint_fine/')
+    inpaint_path = os.path.join(write_dir, 'inpaint/')
     if not os.path.exists(write_dir):
         os.mkdir(write_dir)
     if not os.path.exists(vis_path):

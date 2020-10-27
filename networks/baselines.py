@@ -1,10 +1,31 @@
 import torch
 import torch.nn as nn
 from networks.unet_deeper import UnetEncoderD, UnetDecoderD
+import torch.nn.init as init
+
+def weights_init(init_type='gaussian'):
+    def init_fun(m):
+        classname = m.__class__.__name__
+        if (classname.find('Conv') == 0 or classname.find(
+                'Linear') == 0) and hasattr(m, 'weight'):
+            if init_type == 'gaussian':
+                init.normal_(m.weight.data, 0.0, 0.02)
+            elif init_type == 'xavier':
+                init.xavier_normal_(m.weight.data, gain=math.sqrt(2))
+            elif init_type == 'kaiming':
+                init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+            elif init_type == 'orthogonal':
+                init.orthogonal_(m.weight.data, gain=math.sqrt(2))
+            elif init_type == 'default':
+                pass
+            else:
+                assert 0, "Unsupported initialization: {}".format(init_type)
+            if hasattr(m, 'bias') and m.bias is not None:
+                init.constant_(m.bias.data, 0.0)
+    return init_fun
 
 
 class UnetBaselineD(nn.Module):
-
     def __init__(self, in_channels=3, depth=5, shared_depth=0, use_vm_decoder=False, blocks=1,
                  out_channels_image=3, out_channels_mask=1, start_filters=16, residual=True, batch_norm=True,
                  transpose=True, concat=True, transfer_data=True):
@@ -42,6 +63,7 @@ class UnetBaselineD(nn.Module):
                                                depth=shared_depth, blocks=blocks[4], residual=residual,
                                                batch_norm=batch_norm, transpose=transpose, concat=concat,
                                                is_final=False)
+        self.set_optimizers()
 
     def set_optimizers(self):
         self.optimizer_encoder = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
@@ -159,6 +181,7 @@ class PUnetBaseline(nn.Module):
             self.optimizer_vm = torch.optim.Adam(self.vm_decoder.parameters(), lr=0.001)
         if self.shared != 0:
             self.optimizer_shared = torch.optim.Adam(self.shared_decoder.parameters(), lr=0.001)
+        self.apply(weight_init('kaiming'))
 
     def zero_grad_all(self):
         self.optimizer_encoder.zero_grad()

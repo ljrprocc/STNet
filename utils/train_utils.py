@@ -1,12 +1,14 @@
 import torch
 import torch.nn as nn
 import os
+import sys
+sys.path.append('/home/jingru.ljr/Motif-Removal/')
 import pickle
-from loaders.cache_loader import CacheLoader
+# from loaders.cache_loader import CacheLoader
 from loaders.icdar2015_loader import IC15Loader
 from torch.utils.data import DataLoader
 from train.train_options import TrainOptions as Opt
-from networks.baselines import *
+from networks.baselines import UnetBaselineD
 from utils.image_utils import save_image
 from torchvision.utils import make_grid
 from torchvision import models
@@ -277,7 +279,7 @@ def save_test_images(net, loader, image_name, device):
         output = net(synthesized)
         # print(output[0].shape)
         # exit(-1)
-        guess_images, guess_mask = output[0], output[3]
+        guess_images, guess_mask = output[0], output[-1]
         # print(guess_mask)
         expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
         print(torch.mean(guess_images, (0,2,3)))
@@ -305,5 +307,3 @@ def save_test_images(net, loader, image_name, device):
         save_image(images_un, image_name)
     net.train()
     return images_un
-
-

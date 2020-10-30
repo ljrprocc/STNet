@@ -47,6 +47,7 @@ def run_boxes(text_boxes, pred_mask, write_path, write_res_name):
     fwrite = open(write_res_name, 'w')
     fwrite.close()
     np.savetxt(write_res_name, X=np.array(bboxes).reshape(-1, 8), delimiter=',', fmt='%.2f')
+    return len(bboxes)
 
 
 def visualization(img_path, write_path):

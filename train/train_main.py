@@ -10,16 +10,16 @@ import torch
 from tensorboardX import SummaryWriter
 import argparse
 # torch.cuda.set_device(4)
-device = torch.device('cuda:0')
+device = torch.device('cuda:3')
 # paths
 root_path = '..'
 # train_tag = 'demo_coco'
-train_tag = 'icdar_total3x_style'
+train_tag = 'icdar_total2x_per'
 # train_tag = 'demo_msra_1'
 
 # datasets paths
 # cache_root = ['/data/jingru.ljr/COCO/syn_output/']
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2xa/']
 # cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 # dataset configurations
@@ -39,7 +39,7 @@ gen_only = True
 dis_channels = 64
 gen_channels = 48
 dilation_depth = 0
-TDBmode = True
+TDBmode = False
 
 # train configurations
 gamma1 = 3   # L1 image
@@ -53,7 +53,7 @@ gamma_gen = 0.5
 gamma_coarse = 1
 gamma_coarse_hole = 0.2 
 epochs = 1500
-batch_size = 16
+batch_size = 64
 print_frequency = 5
 save_frequency = 150
 start_epoch = 0
@@ -83,14 +83,15 @@ def dice_loss(guess_mask, vm_mask, dice_criterion, training_masks=None):
 def train_iim(model, synthesized, vm_mask,images, vgg_feas, per):
     # Dis update
     model.discriminator.zero_grad()
-    guess_images, _, dis_loss, guess_mask, coarse_images = model(synthesized, 'dis')
+    guess_images, _, dis_loss, guess_mask, coarse_images, off = model(synthesized, 'dis')
     l =  gamma_dis * dis_loss
     # print(l, dis_loss)
     l.backward()
     model.dis_optimzer.step()
     # Gen update
     model.generator.zero_grad()
-    guess_images, gen_loss, _, guess_mask, coarse_images = model(synthesized, 'gen')
+    guess_images, gen_loss, _, guess_mask, coarse_images, off = model(synthesized, 'gen')
+    # print(off.shape)
     expanded_vm_mask = vm_mask.repeat(1, 3, 1, 1)
     expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
     reconstructed_pixels = guess_images * expanded_vm_mask
@@ -98,9 +99,10 @@ def train_iim(model, synthesized, vm_mask,images, vgg_feas, per):
     real_pixels = images * expanded_vm_mask
     loss_l1_recon = l1_loss(reconstructed_pixels, real_pixels)
     loss_l1_outer = l1_loss(reconstructed_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
-    loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas(images))
+    # loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas(images))
 
-    loss = gamma1 * loss_l1_recon + gamma5 * loss_l1_outer + gamma_gen * gen_loss + gamma4 *  loss_perceptual
+    # loss = gamma1 * loss_l1_recon + gamma5 * loss_l1_outer + gamma_gen * gen_loss + gamma4 *  loss_perceptual
+    loss = gamma1 * loss_l1_recon + gamma5 * loss_l1_outer + gamma_gen * gen_loss
     loss.requires_grad_()
     loss.backward()
     model.gen_optimzer.step()
@@ -209,7 +211,7 @@ def train(net, train_loader, test_loader, opts):
         # savings
         if real_epoch % save_frequency == 0:
             print("checkpointing...")
-            image_name = '%s/%s_%d_finess.png' % (images_path, train_tag, real_epoch)
+            image_name = '%s/%s_%d_finess_hinge.png' % (images_path, train_tag, real_epoch)
             _ = save_test_images(net, test_loader, image_name, device)
             if not TDBmode and not os.path.exists('%s/epoch%d'%(nets_path, real_epoch)):
                 os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
@@ -229,9 +231,9 @@ def run(opts):
     init_folders(nets_path, images_path)
     opt = load_globals(nets_path, globals(), override=True)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
-    base_net = init_nets(opt, nets_path, device)
-    pretrain_path = '%s/checkpoints/icdar_total3x_per/' % (root_path)
-    #base_net = InpaintModel(opt, nets_path, device, tag='1200').to(device)
+    # base_net = init_nets(opt, nets_path, device)
+    pretrain_path = '%s/checkpoints/icdar_total2x_per/' % (root_path)
+    base_net = InpaintModel(opt, nets_path, device, tag='1500').to(device)
     # if not TDBmode:
     #     base_net.load(35)
     train(base_net, train_loader, test_loader, opts)
@@ -239,7 +241,7 @@ def run(opts):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--logdir', type=str, default='/data/jingru.ljr/AAAI2021/logs_icdar3x_style')
+    parser.add_argument('--logdir', type=str, default='/data/jingru.ljr/AAAI2021/logs_icdar2x_per3')
     
     opts = parser.parse_args()
     multiprocessing.set_start_method('spawn', force=True)

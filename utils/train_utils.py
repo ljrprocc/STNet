@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import os
 import sys
 sys.path.append('/home/jingru.ljr/Motif-Removal/')
@@ -279,7 +280,8 @@ def save_test_images(net, loader, image_name, device):
         output = net(synthesized)
         # print(output[0].shape)
         # exit(-1)
-        guess_images, guess_mask = output[0], output[-1]
+        # guess_images, guess_mask = output[0], output[-1]
+        guess_images, guess_mask, offsets = output[0], output[3], output[-1]
         # print(guess_mask)
         expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
         print(torch.mean(guess_images, (0,2,3)))
@@ -299,7 +301,12 @@ def save_test_images(net, loader, image_name, device):
             reconstructed_vm = (guess_vm - 1) * expanded_guess_mask + 1
             images_un = (torch.cat((synthesized, reconstructed_images, images, reconstructed_vm, transformed_guess_mask), 0))
         else:
-            images_un = (torch.cat((synthesized, reconstructed_images, guess_images, transformed_guess_mask, expanded_real_mask), 0))
+            # print(offsets.shape)
+            offsets = F.interpolate(offsets, scale_factor=4)
+            # visualize the performance of CA.
+            images_un = (torch.cat((synthesized, reconstructed_images, guess_images, transformed_guess_mask, expanded_real_mask, offsets / 127.5 - 1), 0))
+            # close the visualization of CA.
+            # images_un = (torch.cat((synthesized, reconstructed_images, guess_images, transformed_guess_mask, expanded_real_mask), 0))
         # print(torch.sum(guess_mask), torch.sum(vm_mask))
         images_un = torch.clamp(images_un.data, min=-1, max=1)
         images_un = make_grid(images_un, nrow=synthesized.shape[0], padding=5, pad_value=1)

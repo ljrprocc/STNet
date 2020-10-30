@@ -60,10 +60,10 @@ class Discriminator(nn.Module):
 class InpaintModel(nn.Module):
     def __init__(self, opt, net_path, device, tag='', gen_only=True, gate=False):
         super(InpaintModel, self).__init__()
-        self.adversial_loss = AdversialLoss('lsgan')
+        self.adversial_loss = AdversialLoss()
         self.discriminator = Discriminator(opt.dis_channels)
         self.mask_generator = init_nets(opt, net_path, device, tag)
-        self.generator = Coarse2FineModel(opt.gen_channels) if not gate else GatedCoarse2FineModel(opt.gen_channels)
+        self.generator = TinyCoarse2FineModel(opt.gen_channels) if not gate else GatedCoarse2FineModel(opt.gen_channels)
         self.gate = gate
         # print(self.generator)
         self.gen_only = gen_only
@@ -118,7 +118,7 @@ class InpaintModel(nn.Module):
             gen_loss += gen_gan_loss
         # print(fine_image.shape)
 
-        return x_out, gen_loss, dis_loss, result_mask, corase_image
+        return x_out, gen_loss, dis_loss, result_mask, corase_image, offsests
         
     def zero_grad_all(self):
         self.dis_optimzer.zero_grad()
@@ -157,6 +157,9 @@ class InpaintModel(nn.Module):
                 para.requires_grad = False
         if init:
             self.apply(weight_init('kaiming'))
+        else:
+            self.generator.apply(weight_init('kaiming'))
+            self.discriminator.apply(weight_init('kaiming'))
 
     def load(self, epoch):
         appendix = 'g' if self.gate else ''

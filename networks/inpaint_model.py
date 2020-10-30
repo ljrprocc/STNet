@@ -3,8 +3,10 @@ import torch.nn as nn
 import numpy as np
 import math
 import torch.nn.functional as F
+import torchvision.transforms as T
 
 from networks.baselines import *
+from utils.inpaint_utils import flow_to_image
 
 def extract_image_patches(img, kernel, stride=1, dilation=1):
     b,c,h,w = img.shape
@@ -162,9 +164,14 @@ class ContextAttention(nn.Module):
         # print(y.shape, offsets.shape)
         # print(h_add.shape, w_add.shape)
         offsets = offsets - torch.cat([h_add, w_add], 1)
+        flows_np = flow_to_image(offsets.data.cpu().numpy())
+        flows = torch.from_numpy(flows_np).to(y.device)
+        # print(flows.shape)
+        if rate != 1:
+            flows = F.interpolate(flows, scale_factor=rate)
         
         # exit(-1)
-        return y, offsets
+        return y, flows
 
 class GatedCoarse2FineModel(nn.Module):
     def __init__(self, hidden_channels=24):

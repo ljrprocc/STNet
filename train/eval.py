@@ -3,6 +3,7 @@ import os
 import cv2
 import sys
 import math
+import time
 import torch
 import torch.nn as nn
 from PIL import Image
@@ -21,7 +22,7 @@ device = torch.device('cuda:0')
 root_path = '..'
 # train_tag = 'demo_coco'
 # train_tag = 'demo_msra_1'
-train_tag = 'icdar_total3x_style'
+train_tag = 'icdar_total2x_style'
 
 nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
 
@@ -37,7 +38,7 @@ batch_size=16
 criterion = nn.MSELoss()
 
 # datasets paths
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
+cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2xa/']
 # cache_root = ['/data/jingru.ljr/COCO/syn_output/']
 # cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
@@ -49,12 +50,15 @@ def cal_psnr(reconstructed_images, ori):
 def test(test_loader, model, debug=False, baseline=False):
     avg_psnr = [0., 0.]
     avg_ssim = [0., 0.]
+    total_time = 0.
+    l = 0
     with torch.no_grad():
         for i, batch in tqdm.tqdm(enumerate(test_loader)):
             img, ori = batch[0].to(device), batch[1].to(device)
             # print(batch[-1].data, i)
             # exit(-1)
             model.eval()
+            a = time.time()
             model = model.to(device)
             output = model(img)
             jpg_name = test_loader.dataset.syn_img_paths[i].split('/')[-1]
@@ -73,7 +77,10 @@ def test(test_loader, model, debug=False, baseline=False):
             # real_img = np.transpose(real_img, (1,2,0)) * 255
             # real_img = real_img[:, :, ::-1]
             # print(real_img)
-            run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
+            lens = run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
+            l += lens
+            b = time.time()
+            total_time = total_time + (b - a)
             expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
             reconstructed_pixels = guess_images * expanded_guess_mask
             reconstructed_images = img * (1 - expanded_guess_mask) + reconstructed_pixels
@@ -98,12 +105,13 @@ def test(test_loader, model, debug=False, baseline=False):
 
     print('=====> Avg. PSNR: {:.4f} dB, baseline: {:.4f} dB'.format(avg_psnr[0] / len(test_loader), avg_psnr[1] / len(test_loader)))
     print('=====> Avg. SSIM: {:.6f}, baseline: {:.6f}'.format(avg_ssim[0] / len(test_loader), avg_ssim[1] / len(test_loader)))
+    print('FPS: {:.2f}'.format(l / total_time))
 
 
 def run():
     opt = load_globals(nets_path, globals(), override=True)
 
-    base_net = init_nets(opt, nets_path, device, tag='1200')
+    base_net = init_nets(opt, nets_path, device, tag='1500')
     # base_net = InpaintModel(opt, nets_path, device, tag='1500', gate=False).to(device)
     # base_net.load(1000)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)

@@ -34,9 +34,9 @@ class UnetDecoderD(nn.Module):
     def __call__(self, x, encoder_outs=None, mask=None, encoder_masks=None):
         return self.forward(x, encoder_outs, mask, encoder_masks)
 
-    def forward(self, x, encoder_outs=None, mask=None, encoder_masks=None):
-        # print(len(encoder_masks))
+    def get_features(self, x, encoder_outs=None, mask=None, encoder_masks=None):
         lastx = x
+        features = []
         for i, up_conv in enumerate(self.up_convs):
             # if isinstance(x, tuple):
             #     print(x)
@@ -53,6 +53,7 @@ class UnetDecoderD(nn.Module):
                 # print('**')
             else:
                 x = up_conv(x, before_pool)
+            features.append(x)
             # print(x.shape)
             # print(lastx.shape)
         # print('**')
@@ -61,6 +62,11 @@ class UnetDecoderD(nn.Module):
                 x, mask = self.conv_final(x, mask)
             else:
                 x = self.conv_final(x)
+        return x, mask, features
+
+    def forward(self, x, encoder_outs=None, mask=None, encoder_masks=None):
+        # print(len(encoder_masks))
+        x, mask, features = self.get_features(x, encoder_outs, mask, encoder_masks)
         return x, mask
 
 

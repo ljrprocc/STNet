@@ -28,7 +28,7 @@ def weights_init(init_type='gaussian'):
 class UnetBaselineD(nn.Module):
     def __init__(self, in_channels=3, depth=5, shared_depth=0, use_vm_decoder=False, blocks=1,
                  out_channels_image=3, out_channels_mask=1, start_filters=16, residual=True, batch_norm=True,
-                 transpose=True, concat=True, transfer_data=True):
+                 transpose=True, concat=True, transfer_data=True, open_image=True):
         super(UnetBaselineD, self).__init__()
         self.transfer_data = transfer_data
         self.shared = shared_depth
@@ -40,10 +40,12 @@ class UnetBaselineD(nn.Module):
             concat = False
         self.encoder = UnetEncoderD(in_channels=in_channels, depth=depth, blocks=blocks[0],
                                     start_filters=start_filters, residual=residual, batch_norm=batch_norm)
-        self.image_decoder = UnetDecoderD(in_channels=start_filters * 2 ** (depth - shared_depth - 1),
-                                          out_channels=out_channels_image, depth=depth - shared_depth,
-                                          blocks=blocks[1], residual=residual, batch_norm=batch_norm,
-                                          transpose=transpose, concat=concat)
+        if open_image:
+            self.image_decoder = UnetDecoderD(in_channels=start_filters * 2 ** (depth - shared_depth - 1),
+                                            out_channels=out_channels_image, depth=depth - shared_depth,
+                                            blocks=blocks[1], residual=residual, batch_norm=batch_norm,
+                                            transpose=transpose, concat=concat)
+        self.open_image = open_image
         self.mask_decoder = UnetDecoderD(in_channels=start_filters * 2 ** (depth - 1),
                                          out_channels=out_channels_mask, depth=depth,
                                          blocks=blocks[2], residual=residual, batch_norm=batch_norm,
@@ -67,7 +69,8 @@ class UnetBaselineD(nn.Module):
 
     def set_optimizers(self):
         self.optimizer_encoder = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
-        self.optimizer_image = torch.optim.Adam(self.image_decoder.parameters(), lr=0.001)
+        if self.open_image:
+            self.optimizer_image = torch.optim.Adam(self.image_decoder.parameters(), lr=0.001)
         self.optimizer_mask = torch.optim.Adam(self.mask_decoder.parameters(), lr=0.001)
         if self.vm_decoder is not None:
             self.optimizer_vm = torch.optim.Adam(self.vm_decoder.parameters(), lr=0.001)
@@ -76,7 +79,8 @@ class UnetBaselineD(nn.Module):
 
     def zero_grad_all(self):
         self.optimizer_encoder.zero_grad()
-        self.optimizer_image.zero_grad()
+        if self.open_image:
+            self.optimizer_image.zero_grad()
         self.optimizer_mask.zero_grad()
         if self.vm_decoder is not None:
             self.optimizer_vm.zero_grad()
@@ -85,7 +89,8 @@ class UnetBaselineD(nn.Module):
 
     def step_all(self):
         self.optimizer_encoder.step()
-        self.optimizer_image.step()
+        if self.open_image:
+            self.optimizer_image.step()
         self.optimizer_mask.step()
         if self.vm_decoder is not None:
             self.optimizer_vm.step()
@@ -105,7 +110,10 @@ class UnetBaselineD(nn.Module):
         image_code, before_pool = self.encoder(synthesized)
         if not self.transfer_data:
             before_pool = None
-        reconstructed_image = torch.tanh(self.image_decoder(image_code, before_pool))
+        if self.open_image:
+            reconstructed_image = torch.tanh(self.image_decoder(image_code, before_pool))
+        else:
+            reconstructed_image = None
         reconstructed_mask = torch.sigmoid(self.mask_decoder(image_code, before_pool))
         if self.vm_decoder is not None:
             reconstructed_vm = torch.tanh(self.vm_decoder(image_code, before_pool))
@@ -124,7 +132,10 @@ class UnetBaselineD(nn.Module):
         x, _ = self.shared_decoder(image_code, shared_before_pool)
         # print(x)
         # exit(-1)
-        reconstructed_image = torch.tanh(self.image_decoder(x, unshared_before_pool)[0])
+        if self.open_image:
+            reconstructed_image = torch.tanh(self.image_decoder(x, unshared_before_pool)[0])
+        else:
+            reconstructed_image = None
         reconstructed_mask = torch.sigmoid(self.mask_decoder(image_code, before_pool)[0])
         # for fe_map in before_pool:
         #     print(fe_map.shape)
@@ -132,6 +143,19 @@ class UnetBaselineD(nn.Module):
             reconstructed_vm = torch.tanh(self.vm_decoder(x, unshared_before_pool))
             return reconstructed_image, reconstructed_mask, reconstructed_vm
         return reconstructed_image, reconstructed_mask
+
+    def get_features(self, synthesized):
+        image_code, before_pool, _, _ = self.encoder(synthesized)
+        # if self.transfer_data:
+        #     shared_before_pool = before_pool[- self.shared - 1:]
+        #     unshared_before_pool = before_pool[: - self.shared]
+        # else:
+        #     before_pool = None
+        #     shared_before_pool = None
+        #     unshared_before_pool = None
+        # x, _ = self.shared_decoder(image_code, shared_before_pool)
+        _, _, mask_features = self.mask_decoder.get_features(image_code, before_pool)
+        return mask_features
 
 
 class PUnetBaseline(nn.Module):

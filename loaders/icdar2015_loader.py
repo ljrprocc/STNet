@@ -152,7 +152,9 @@ class IC15Loader(Dataset):
         img = Image.fromarray(img)
         img = img.convert('RGB')
         img = transforms.ToTensor()(img)
-        img = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(img)
+        # print(torch.max(img), torch.min(img))
+        img = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])(img)
+        # print(torch.max(img), torch.min(img))
         return img
 
     def add_padding(self, img):

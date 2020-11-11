@@ -90,13 +90,13 @@ class InpaintModel(nn.Module):
             with torch.no_grad():
                 x_out, offsests = self.generator(corase_image, xori=x, mask=result_mask)
         hard_mask = (result_mask.repeat(1,3,1,1) > 0.9).int()
-        fine_image = x_out * result_mask.repeat(1,3,1,1) + x * (1 - result_mask.repeat(1,3,1,1))
+        fine_image = x_out * hard_mask + x * (1 - hard_mask)
         # print(x_out[0][:, :, 0].mean(), x_out[0][:, :, 1].mean(), x_out[0][:, :, 2].mean())
         gen_loss = 0.
         dis_loss = 0.
         if update=='dis':
         # discriminator loss
-            dis_input_real = x
+            dis_input_real = x_out
             # dis_input_fake = fine_image.detach()
             dis_input_fake = fine_image.detach()
             dis_real = self.discriminator(dis_input_real)

@@ -245,10 +245,10 @@ def init_loaders(opt, cache_root='', ds='IC15'):
     return _train_data_loader, _test_data_loader
 
 
-def init_nets(opt, net_path, device, tag='', para=False):
+def init_nets(opt, net_path, device, tag='', para=False, open_image=True):
     # net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder,
     #                              blocks=opt.num_blocks)
-    net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder, blocks=opt.num_blocks)
+    net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder, blocks=opt.num_blocks, open_image=open_image)
     if para:
         net_baseline = net_baseline.to(0)
         net_baseline = nn.DataParallel(net_baseline, device_ids=[0,1], output_device=0)
@@ -265,7 +265,7 @@ def init_nets(opt, net_path, device, tag='', para=False):
     return net_baseline
 
 
-def save_test_images(net, loader, image_name, device):
+def save_test_images(net, loader, image_name, device, image_decoder=True):
     with torch.no_grad():
         net.eval()
         synthesized, images, vm_mask, vm_area, _ = next(iter(loader))
@@ -284,16 +284,17 @@ def save_test_images(net, loader, image_name, device):
         guess_images, guess_mask, offsets = output[0], output[3], output[-1]
         # print(guess_mask)
         expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
-        print(torch.mean(guess_images, (0,2,3)))
-        # debug
-        # for i in range(guess_images.shape[0]):
-        #     a = guess_images[i, 0, :, :].cpu().numpy()
-        #     b = guess_images[i, 1, :, :].cpu().numpy()
-        #     c = guess_images[i, 2, :, :].cpu().numpy()
-        #     print(np.corrcoef(a, b), np.corrcoef(a, c), np.corrcoef(b, c))
-        reconstructed_pixels = guess_images * expanded_guess_mask
-        reconstructed_images = synthesized * (1 - expanded_guess_mask) + reconstructed_pixels
-        real_pixels = images * expanded_real_mask
+        if image_decoder:
+            print(torch.mean(guess_images, (0,2,3)))
+            # debug
+            # for i in range(guess_images.shape[0]):
+            #     a = guess_images[i, 0, :, :].cpu().numpy()
+            #     b = guess_images[i, 1, :, :].cpu().numpy()
+            #     c = guess_images[i, 2, :, :].cpu().numpy()
+            #     print(np.corrcoef(a, b), np.corrcoef(a, c), np.corrcoef(b, c))
+            reconstructed_pixels = guess_images * expanded_guess_mask
+            reconstructed_images = synthesized * (1 - expanded_guess_mask) + reconstructed_pixels
+            real_pixels = images * expanded_real_mask
         transformed_guess_mask = expanded_guess_mask * 2 - 1
         expanded_real_mask = expanded_real_mask * 2 - 1
         if len(output) == 3:
@@ -302,11 +303,14 @@ def save_test_images(net, loader, image_name, device):
             images_un = (torch.cat((synthesized, reconstructed_images, images, reconstructed_vm, transformed_guess_mask), 0))
         else:
             # print(offsets.shape)
-            offsets = F.interpolate(offsets, scale_factor=4)
+            # offsets = F.interpolate(offsets, scale_factor=4)
             # visualize the performance of CA.
-            images_un = (torch.cat((synthesized, reconstructed_images, guess_images, transformed_guess_mask, expanded_real_mask, offsets / 127.5 - 1), 0))
+            # images_un = (torch.cat((synthesized, reconstructed_images, guess_images, transformed_guess_mask, expanded_real_mask, offsets / 127.5 - 1), 0))
             # close the visualization of CA.
-            # images_un = (torch.cat((synthesized, reconstructed_images, guess_images, transformed_guess_mask, expanded_real_mask), 0))
+            if image_decoder:
+                images_un = (torch.cat((synthesized, reconstructed_images, guess_images, transformed_guess_mask, expanded_real_mask), 0))
+            else:
+                images_un = (torch.cat((synthesized, transformed_guess_mask, expanded_real_mask), 0))
         # print(torch.sum(guess_mask), torch.sum(vm_mask))
         images_un = torch.clamp(images_un.data, min=-1, max=1)
         images_un = make_grid(images_un, nrow=synthesized.shape[0], padding=5, pad_value=1)

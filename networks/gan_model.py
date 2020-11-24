@@ -79,7 +79,7 @@ class InpaintModel(nn.Module):
         self.mask_generator = self.mask_generator.to(device)
         self.generator = self.generator.to(device)
 
-    def forward(self, x, update='gen'):
+    def forward(self, x, update='gen', x_real=None):
         assert update in ['gen', 'dis']
         with torch.no_grad():
             results_mask_gen = self.mask_generator(x)
@@ -96,7 +96,7 @@ class InpaintModel(nn.Module):
         dis_loss = 0.
         if update=='dis':
         # discriminator loss
-            dis_input_real = x_out
+            dis_input_real = x_real
             # dis_input_fake = fine_image.detach()
             dis_input_fake = fine_image.detach()
             dis_real = self.discriminator(dis_input_real)

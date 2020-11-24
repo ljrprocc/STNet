@@ -224,7 +224,7 @@ def load_globals(nets_path, globals_dict, override=True):
     return __opt
 
 
-def init_loaders(opt, cache_root='', ds='IC15'):
+def init_loader(opt, cache_root='', ds='IC15'):
     if ds != 'IC15':
         train_dataset = CacheLoader(cache_root, train=True, patch_size=opt.patch_size)
         test_dataset = CacheLoader(cache_root, train=False, patch_size=None)
@@ -242,8 +242,11 @@ def init_loaders(opt, cache_root='', ds='IC15'):
         batch_scale = 1
     _test_data_loader = DataLoader(test_dataset, batch_size=1,
                                    shuffle=False, num_workers=1)
-    return _train_data_loader, _test_data_loader
-
+    return _train_data_loader, _test_data_loader, test_dataset
+    
+def init_loaders(opt, cache_root='', ds='IC15'):
+    a_loader, b_loader, _ = init_loader(opt, cache_root, ds)
+    return a_loader, b_loader
 
 def init_nets(opt, net_path, device, tag='', para=False, open_image=True):
     # net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder,
@@ -292,11 +295,14 @@ def save_test_images(net, loader, image_name, device, image_decoder=True):
             #     b = guess_images[i, 1, :, :].cpu().numpy()
             #     c = guess_images[i, 2, :, :].cpu().numpy()
             #     print(np.corrcoef(a, b), np.corrcoef(a, c), np.corrcoef(b, c))
-            reconstructed_pixels = guess_images * expanded_guess_mask
-            reconstructed_images = synthesized * (1 - expanded_guess_mask) + reconstructed_pixels
+            expanded_predicted_mask = (expanded_guess_mask > 0.9).float()
+            reconstructed_pixels = guess_images * expanded_predicted_mask
+            reconstructed_images = synthesized * (1 - expanded_predicted_mask) + reconstructed_pixels
+            # print(vm_mask.shape, expanded_real_mask.shape, images.shape)
             real_pixels = images * expanded_real_mask
         transformed_guess_mask = expanded_guess_mask * 2 - 1
         expanded_real_mask = expanded_real_mask * 2 - 1
+        # transformed_predicted_mask = expanded_predicted_mask * 2 - 1
         if len(output) == 3:
             guess_vm = output[2]
             reconstructed_vm = (guess_vm - 1) * expanded_guess_mask + 1

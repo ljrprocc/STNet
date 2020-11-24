@@ -17,12 +17,12 @@ from utils.text_utils import run_boxes
 from networks.gan_model import *
 import tqdm
 
-device = torch.device('cuda:1')
+device = torch.device('cuda:4')
 
 root_path = '..'
-# train_tag = 'demo_coco_per'
-# train_tag = 'demo_msra_1'
-train_tag = 'icdar_total2x_style'
+# train_tag = 'demo_coco_maskonly'
+train_tag = 'demo_msra_maskonly'
+# train_tag = 'icdar_total3x_maskonly'
 
 nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
 
@@ -34,15 +34,15 @@ dilation_depth= 0
 dis_channels=64
 gen_channels=48
 batch_size=16
-image_encoder=True
+image_encoder=False
 gate = False
 
 criterion = nn.MSELoss()
 
 # datasets paths
-cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
+# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
 # cache_root = ['/data/jingru.ljr/COCO/']
-# cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
+cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 def cal_psnr(reconstructed_images, ori):
     mse = criterion(reconstructed_images, ori)
@@ -85,15 +85,17 @@ def test(test_loader, model, debug=False, baseline=False):
             # real_img = np.transpose(real_img, (1,2,0)) * 255
             # real_img = real_img[:, :, ::-1]
             # print(real_img)
-            # lens = run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
-            # l += lens
+            lens = run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
+            l += lens
             b = time.time()
             expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
             transformed_guess_mask = expanded_guess_mask * 2 - 1
+            expanded_predicted_mask = (expanded_guess_mask > 0.9).float()
+            transformed_predicted_mask = expanded_predicted_mask * 2 - 1
             total_time = total_time + (b - a)
             if image_encoder:
-                reconstructed_pixels = guess_images * expanded_guess_mask
-                reconstructed_images = img * (1 - expanded_guess_mask) + reconstructed_pixels
+                reconstructed_pixels = guess_images * expanded_predicted_mask
+                reconstructed_images = img * (1 - expanded_predicted_mask) + reconstructed_pixels
                 # print(torch.max(ori), torch.min(ori))
                 # exit(-1)
                 # print(torch.max(ori * torch.tensor([0.225, 0.229, 0.224]).cuda()+ torch.tensor([0.406, 0.485, 0.456]).cuda()))
@@ -105,9 +107,11 @@ def test(test_loader, model, debug=False, baseline=False):
                 ssim_baseline = ssim(ori, img, data_range=2., size_average=False)
             if debug:
                 if image_encoder:
-                    images_un = torch.cat((ori, img, reconstructed_images, transformed_guess_mask), 0)
+                    images_un = torch.cat((ori, img, reconstructed_images, transformed_predicted_mask, guess_images), 0)
                 else:
                     images_un = torch.cat((ori, img, transformed_guess_mask), 0)
+
+                # print(torch.max(images_un.data), torch.min(images_un.data))
                 images_un = torch.clamp(images_un.data, min=-1, max=1)
                 images_un = make_grid(images_un, nrow=img.shape[0], padding=5, pad_value=1)
                 save_image(images_un,write_inpaint_path)
@@ -131,9 +135,9 @@ def test(test_loader, model, debug=False, baseline=False):
 def run():
     opt = load_globals(nets_path, globals(), override=True)
 
-    base_net = init_nets(opt, nets_path, device, tag='5003x', open_image=image_encoder)
-    # base_net = InpaintModel(opt, nets_path, device, tag='3003x', gate=gate).to(device)
-    # base_net.load(400)
+    base_net = init_nets(opt, nets_path, device, tag='25003x', open_image=image_encoder)
+    # base_net = InpaintModel(opt, nets_path, device, tag='14003x', gate=gate).to(device)
+    # base_net.load(1100)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
 
     test(test_loader, base_net, debug=True)

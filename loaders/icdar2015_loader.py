@@ -14,7 +14,7 @@ import multiprocessing
 def get_list(dir, gt=False):
     ori_list = list(os.listdir(dir))
     res = []
-    mode = '.txt' if gt else '.jpg'
+    mode = '.txt' if gt else '.JPG'
     for file in ori_list:
         if os.path.splitext(file)[-1] == mode:
             res.append(file)
@@ -88,6 +88,7 @@ class IC15Loader(Dataset):
         ori_img_path = self.ori_img_paths[idx]
         syn_img_path = self.syn_img_paths[idx]
         syn_gt_path = self.syn_gt_paths[idx]
+        
         # print(ori_img_path, syn_img_path, syn_gt_path)
         # exit(-1)
         ori_img = cv2.imread(ori_img_path)
@@ -146,6 +147,7 @@ class IC15Loader(Dataset):
         #     print(syn_img.shape, ori_img.shape, mask.shape)
         if area == 0:
             area = 1
+        # print(ori_img.shape)
         return syn_img, ori_img, mask.unsqueeze(0).float(), float(area), float(h * w)
 
     def transforms(self, img):

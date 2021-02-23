@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/jingru.ljr/Motif-Removal')
+sys.path.append('/home/jrlees/journal/STNet')
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 from networks.gan_model import *
 from utils.train_utils import *
@@ -10,57 +10,7 @@ import torch
 from tensorboardX import SummaryWriter
 import argparse
 # torch.cuda.set_device(4)
-device = torch.device('cuda:3')
-# paths
-root_path = '..'
-# train_tag = 'demo_coco_per'
-# train_tag = 'icdar_total2x_per_all'
-train_tag = 'demo_msra_per'
 
-
-# datasets paths
-# cache_root = ['/data/jingru.ljr/COCO/']
-# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_2xa/']
-cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
-
-# dataset configurations
-patch_size = 192
-image_size_w = 960
-image_size_h =720
-
-# network
-nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
-images_path = '%s/images' % nets_path
-
-num_blocks = (3, 3, 3, 3, 3)
-shared_depth = 2
-use_vm_decoder = False
-use_rgb = True
-gen_only = True
-dis_channels = 64
-gen_channels = 48
-dilation_depth = 0
-TDBmode = False
-image_encoder = True
-gate = False
-
-# train configurations
-gamma1 = 10   # L1 image
-gamma2 = 1   # L1 visual motif
-gamma3 = 10  # L1 style loss
-gamma4 = 0.02 # Perceptual
-gamma5 = 5   # L1 valid
-gamma6 = 2
-gamma_dis = 1
-
-gamma_gen = 1
-gamma_coarse = 1
-gamma_coarse_hole = 0.2 
-epochs = 2500
-batch_size = 32
-print_frequency = 5
-save_frequency = 250
-start_epoch = 0
 
 
 def l1_relative(reconstructed, real, batch, area):
@@ -70,7 +20,8 @@ def l1_relative(reconstructed, real, batch, area):
     return loss_l1
 
 def l1_loss(predict, target):
-    return torch.abs(predict - target).mean()
+    l1_loss = nn.L1Loss()
+    return l1_loss(predict, target)
 
 
 def dice_loss(guess_mask, vm_mask, dice_criterion, training_masks=None):
@@ -84,11 +35,11 @@ def dice_loss(guess_mask, vm_mask, dice_criterion, training_masks=None):
     loss = dice_criterion(guess_mask, vm_mask, selected_masks)
     return loss, selected_masks
 
-def train_iim(model, synthesized, vm_mask,images, vgg_feas, per):
+def train_iim(model, synthesized, vm_mask,images, vgg_feas, per, opt):
     # Dis update
     model.discriminator.zero_grad()
     guess_images, _, dis_loss, guess_mask, coarse_images, off = model(synthesized, 'dis', x_real=images)
-    l =  gamma_dis * dis_loss
+    l =  opt['lamda_dis'] * dis_loss
     # print(l, dis_loss)
     l.backward()
     model.dis_optimzer.step()
@@ -107,7 +58,7 @@ def train_iim(model, synthesized, vm_mask,images, vgg_feas, per):
     loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas(images))
 
     # loss = gamma1 * loss_l1_recon + gamma5 * loss_l1_outer + gamma_gen * gen_loss + gamma4 *  loss_perceptual
-    loss = gamma6*loss_all + gamma_gen * gen_loss + gamma4*loss_perceptual 
+    loss = opt['lamda_rec']*loss_all + opt['lamda_gen'] * gen_loss + opt['lamda_per']*loss_perceptual 
     loss.requires_grad_()
     loss.backward()
     model.gen_optimzer.step()
@@ -120,7 +71,13 @@ def train(net, train_loader, test_loader, opts):
     per = PerceptionLoss()
     tv = TotalVariationLoss(3)
     dice = DiceLoss()
+    gpu_id = opts['gpu_id']
+    device = 'cuda:%d'%(gpu_id)
     vgg_feas = VGGFeature().to(device)
+    start_epoch = opts['start_epoch']
+    epochs = opts['epochs']
+    print_frequency = opts['print_frequency']
+    save_frequency = opts['save_frequency']
     # net.set_optimizers()
     losses = []
     D_losses = []
@@ -128,8 +85,10 @@ def train(net, train_loader, test_loader, opts):
     # if start_epoch > 0:
     #     net.load(start_epoch)
     print('Training Begins')
-    writer = SummaryWriter(logdir=opts.logdir)
+    writer = SummaryWriter(logdir=opts['log_dir'])
     selected_masks = None
+    TDBmode = opts['TDBmode'] == 'open'
+    gen_only = opts['gen_only'] == 'open'
     total_iter = 0
     for epoch in range(start_epoch, epochs):
         real_epoch = epoch + 1
@@ -189,7 +148,7 @@ def train(net, train_loader, test_loader, opts):
                     if not image_encoder:
                         loss = loss_mask
                     else:
-                        loss = gamma1 * loss_l1_recon + loss_mask + gamma5 * loss_l1_outer + gamma4 *  loss_perceptual + gamma3 * loss_style
+                        loss = opts['lamda_rec'] * loss_l1_recon + loss_mask + opts['lamda_valid'] * loss_l1_outer + opts['lamda_per'] *  loss_perceptual + opts['lamda_style'] * loss_style
                     loss.backward()
                     net.step_all()
                     losses.append(loss.item())
@@ -197,6 +156,7 @@ def train(net, train_loader, test_loader, opts):
                     dis_loss, gen_loss, l = train_iim(net, synthesized, vm_mask, images, vgg_feas, per)
                     D_losses.append(dis_loss.item())
                     G_losses.append(gen_loss.item())
+            train_tag = opts['training_name']
             # print
             if (i + 1) % print_frequency == 0:
                 # writer.add_scalar('l_total', l_total_dis, global_step=now_iter)
@@ -243,21 +203,32 @@ def train(net, train_loader, test_loader, opts):
 
 
 def run(opts):
+    
+    # opt = load_globals(nets_path, globals(), override=True)
+    config_path = opts.config
+    opt = get_config(config_path)
+    train_loader, test_loader = init_loaders(opt)
+    gpu_id = opt['gpu_id']
+    device = 'cuda:%d'%(gpu_id)
+    # print()
+    TDBmode = opt['TDBmode'] == 'open'
+    nets_path = opt['ckpt_save_path']
+    images_path = opt['save_path']
     init_folders(nets_path, images_path)
-    opt = load_globals(nets_path, globals(), override=True)
-    train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
+    if TDBmode:
     # print(len(train_loader))
-    # base_net = init_nets(opt, nets_path, device, open_image=image_encoder, tag='')
+        base_net = init_nets(opt, nets_path, device, open_image=image_encoder, tag='')
     # pretrain_path = '%s/checkpoints/icdar_total3x_per/' % (root_path)
-    base_net = InpaintModel(opt, nets_path, device, tag='25003x', gate=gate).to(device)
+    else:
+        base_net = InpaintModel(opt, nets_path, device, tag='25003x', gate=gate).to(device)
     # if not TDBmode:
     #     base_net.load(200)
-    train(base_net, train_loader, test_loader, opts)
+    train(base_net, train_loader, test_loader, opt)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--logdir', type=str, default='/data/jingru.ljr/AAAI2021/logs_coco_maskonlyaaaaaa')
+    parser.add_argument('--config', type=str, default='configs/icdar2015.yaml')
     
     opts = parser.parse_args()
     multiprocessing.set_start_method('spawn', force=True)

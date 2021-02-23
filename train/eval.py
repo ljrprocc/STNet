@@ -17,32 +17,32 @@ from utils.text_utils import run_boxes
 from networks.gan_model import *
 import tqdm
 
-device = torch.device('cuda:4')
+# device = torch.device('cuda:4')
 
-root_path = '..'
-# train_tag = 'demo_coco_maskonly'
-train_tag = 'demo_msra_maskonly'
-# train_tag = 'icdar_total3x_maskonly'
+# root_path = '..'
+# # train_tag = 'demo_coco_maskonly'
+# train_tag = 'demo_msra_maskonly'
+# # train_tag = 'icdar_total3x_maskonly'
 
-nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
+# nets_path = '%s/checkpoints/%s' % (root_path, train_tag)
 
-num_blocks = (3, 3, 3, 3, 3)
-shared_depth = 2
-use_vm_decoder = False
-use_rgb = True
-dilation_depth= 0
-dis_channels=64
-gen_channels=48
-batch_size=16
-image_encoder=False
-gate = False
+# num_blocks = (3, 3, 3, 3, 3)
+# shared_depth = 2
+# use_vm_decoder = False
+# use_rgb = True
+# dilation_depth= 0
+# dis_channels=64
+# gen_channels=48
+# batch_size=16
+# image_encoder=False
+# gate = False
 
-criterion = nn.MSELoss()
+# criterion = nn.MSELoss()
 
-# datasets paths
-# cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
-# cache_root = ['/data/jingru.ljr/COCO/']
-cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
+# # datasets paths
+# # cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
+# # cache_root = ['/data/jingru.ljr/COCO/']
+# cache_root = ['/data/jingru.ljr/MSRA-TD500/syn_ds_root/']
 
 def cal_psnr(reconstructed_images, ori):
     mse = criterion(reconstructed_images, ori)

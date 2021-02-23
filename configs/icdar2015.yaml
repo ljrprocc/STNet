@@ -1,0 +1,44 @@
+# I/O options
+image_root: /home/jrlees/datasets/icdar2015/syn_output/syn_ds_root_1280_2xa
+patch_size: 256
+image_size_h: 720
+image_size_w: 1280
+save_path: images/icdar2015_syn2x
+ckpt_save_path: ckpt/icdar2015_syn2x
+dataset: IC15
+
+# Training options
+training_name: icdar2015_syn2x 
+batch_size: 16
+shared_depth: 2
+TDBmode: True
+dilation_depth: 0
+num_blocks: 3
+gpu_id: 0
+lamda_rec: 1
+lamda_per: 0.05
+lamda_style: 120
+lamda_tv: 2
+lamda_mask: 1
+lamda_dis: 1
+lamda_gen: 1
+lamda_valid: 6
+log_dir: logs/log_icdar2015_syn2x
+
+epochs: 2500
+print_frequency: 5
+save_frequency: 250
+start_epoch: 0
+
+# Network options
+TDBmode: open
+gen_only: close
+
+# Generator options
+gen:
+  hidden_channels: 64
+
+dis:
+  hidden_channels: 48
+
+

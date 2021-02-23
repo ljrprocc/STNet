@@ -110,7 +110,7 @@ class InpaintModel(nn.Module):
         # generator gan loss
             gen_input_fake = fine_image
             with torch.no_grad():
-                gen_fake = self.discriminator(gen_input_fake.detach())
+                gen_fake = self.discriminator(gen_input_fake)
         # print(dis_real.mean(), dis_fake.mean(), gen_fake.mean())
         # exit(-1)
             gen_gan_loss = self.adversial_loss(gen_fake, True, False)
@@ -136,13 +136,13 @@ class InpaintModel(nn.Module):
         self.dis_optimzer = optim.Adam(
             params = self.discriminator.parameters(),
             lr = 0.001,
-            betas = (0.0, 0.9)
+            betas = (0.0, 0.99)
         )
         # print(self.generator.parameters()[0])
         self.gen_optimzer = optim.Adam(
             params = self.generator.parameters(),
             lr = 0.001,
-            betas = (0.0, 0.9)
+            betas = (0.0, 0.99)
         )
         if self.gen_only:
             for para in self.mask_generator.parameters():

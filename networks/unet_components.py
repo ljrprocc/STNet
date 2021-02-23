@@ -111,6 +111,7 @@ class UpConvD(nn.Module):
 
     def forward(self, from_up, from_down):
         from_up = self.up_conv(from_up)
+        # print(from_down.shape, from_up.shape)
         if self.concat:
             x1 = torch.cat((from_up, from_down), 1)
         else:
@@ -140,9 +141,10 @@ class DownConvD(nn.Module):
         self.batch_norm = batch_norm
         self.bn = None
         self.pool = None
-        self.conv1 = conv3x3(in_channels, out_channels)
+        self.conv1 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=2, padding=1)
+        self.input_conv = nn.Conv2d(in_channels, out_channels, 3,1,1)
         self.conv2 = []
-        for _ in range(blocks):
+        for i in range(blocks):
             self.conv2.append(conv3x3(out_channels, out_channels))
         if self.batch_norm:
             self.bn = []
@@ -152,23 +154,26 @@ class DownConvD(nn.Module):
         if self.pooling:
             self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.conv2 = nn.ModuleList(self.conv2)
+        self.relu = nn.ReLU(True)
 
     def __call__(self, x):
         return self.forward(x)
 
     def forward(self, x):
-        x1 = f.relu(self.conv1(x))
-        x2 = None
+        x1 = f.relu(self.input_conv(x))
+        # x2 = None
+        # x1 = x
         for idx, conv in enumerate(self.conv2):
             x2 = conv(x1)
             if self.batch_norm:
                 x2 = self.bn[idx](x2)
             if self.residual:
                 x2 = x2 + x1
-            x2 = f.relu(x2)
+            x2 = self.relu(x2)
             x1 = x2
         before_pool = x2
         if self.pooling:
-            x2 = self.pool(x2)
+            x2 = self.relu(self.conv1(x2))
+        # print(x2.shape)
         # Here before_pool is feature map before the last layer of blocks.
         return x2, before_pool

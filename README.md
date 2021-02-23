@@ -20,14 +20,10 @@ Both datasets are organized as
 
 ### Train STNet
 
-1.  Get the files of STNet.
-2.  Change the parameter defined in `train/train_main.py`, like `net_path`, `train_tag`  with and `batch_size`, `patch_size` . Furthermore, set the epoch and print frequency properly.
-3. Run the command `CUDA_VISIBILE_DEVICES=0 python train/train_main.py` to train STNet.
+Rebuilding code now.
 
 
 
 ### Evaluate STNet(Not available yet)
 
-1. Change the parameter defined in `train/eval.py`, such as `net_path`, `train_tag` for specifying the path of synthetic datasets.
-2. Check whether the checkpoint exists in `net_path`.
-3. Run the command `CUDA_VISIBLE_DEVICES=0 python train/eval.py`.
+Rebuilding code now.

@@ -5,6 +5,7 @@ import os
 import sys
 sys.path.append('/home/jingru.ljr/Motif-Removal/')
 import pickle
+import yaml
 # from loaders.cache_loader import CacheLoader
 from loaders.icdar2015_loader import IC15Loader
 from torch.utils.data import DataLoader
@@ -175,6 +176,7 @@ def ohem_single(score, gt_text, training_mask):
     selected_mask = ((score >= threshold)) & (training_mask > 0.5)
     selected_mask = selected_mask.reshape(1, selected_mask.shape[0], selected_mask.shape[1]).astype('float32')
     return selected_mask
+
 def ohem_batch(scores, gt_texts, training_masks):
     scores = scores.squeeze().data.cpu().numpy()
     gt_texts = gt_texts.squeeze().data.cpu().numpy()
@@ -194,49 +196,28 @@ def init_folders(*folders):
         if not os.path.exists(f):
             os.makedirs(f)
 
-
-def load_globals(nets_path, globals_dict, override=True):
-    save_set = {
-                'vm_tag', 'images_root', 'vm_root', 'vm_size', 'image_size', 'image_size_w', 'image_size_h', 'patch_size', 'perturbate', 'opacity_var',
-                'use_rgb', 'weight', 'shared_depth', 'num_blocks', 'batch_size', 'use_vm_decoder', 'rotate_vm', 'TDBmode'
-                'scale_vm', 'crop_vm', 'batch_vm', 'font', 'text_border', 'blur', 'dis_channels', 'gen_channels', 'dilation_depth'
-                }
-    to_save = False
-    params_file = '%s/train_params.pkl' % nets_path
-    __opt = Opt()
-    if os.path.isfile(params_file):
-        print('loading options from %s/' % nets_path)
-        with open(params_file, 'rb') as f:
-            save_globals_dict = pickle.load(f)
-    else:
-        save_globals_dict = {}
-    print(save_globals_dict)
-    for item in save_set:
-        if item not in save_globals_dict and item in globals_dict:
-            to_save = True
-            save_globals_dict[item] = globals_dict[item]
-        if item in save_globals_dict:
-            setattr(__opt, item, save_globals_dict[item])
-            print('%s: %s' % (item, str(save_globals_dict[item])))
-    if to_save and override:
-        with open(params_file, 'wb') as f:
-            pickle.dump(save_globals_dict, f, pickle.HIGHEST_PROTOCOL)
-    return __opt
+# get configs
+def get_config(config):
+    with open(config, 'r') as stream:
+        return yaml.load(stream)
 
 
-def init_loader(opt, cache_root='', ds='IC15'):
+def init_loader(opt):
+    ds = opt['dataset']
+    cache_root = opt['image_root'].split(',')
+    # print(cache_root)
     if ds != 'IC15':
-        train_dataset = CacheLoader(cache_root, train=True, patch_size=opt.patch_size)
+        train_dataset = CacheLoader(cache_root, train=True, patch_size=opt['patch_size'])
         test_dataset = CacheLoader(cache_root, train=False, patch_size=None)
     else:
-        train_dataset = IC15Loader(cache_root, train=True, patch_size=opt.patch_size)
+        train_dataset = IC15Loader(cache_root, train=True, patch_size=opt['patch_size'])
         test_dataset = IC15Loader(cache_root, train=False, patch_size=None)
     # print(train_dataset.root)
     # print(len(train_dataset))
-    _train_data_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=1)
-    if opt.patch_size:
-        batch_scale_w = int(opt.image_size_w / opt.patch_size)
-        batch_scale_h = int(opt.image_size_h / opt.patch_size)
+    _train_data_loader = DataLoader(train_dataset, batch_size=opt['batch_size'], shuffle=True, num_workers=1)
+    if opt['patch_size']:
+        batch_scale_w = int(opt['image_size_w'] / opt['patch_size'])
+        batch_scale_h = int(opt['image_size_h'] / opt['patch_size'])
         batch_scale = batch_scale_w * batch_scale_h
     else:
         batch_scale = 1
@@ -244,14 +225,14 @@ def init_loader(opt, cache_root='', ds='IC15'):
                                    shuffle=False, num_workers=1)
     return _train_data_loader, _test_data_loader, test_dataset
     
-def init_loaders(opt, cache_root='', ds='IC15'):
-    a_loader, b_loader, _ = init_loader(opt, cache_root, ds)
+def init_loaders(opt):
+    a_loader, b_loader, _ = init_loader(opt)
     return a_loader, b_loader
 
 def init_nets(opt, net_path, device, tag='', para=False, open_image=True):
     # net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder,
     #                              blocks=opt.num_blocks)
-    net_baseline = UnetBaselineD(shared_depth=opt.shared_depth, use_vm_decoder=opt.use_vm_decoder, blocks=opt.num_blocks, open_image=open_image)
+    net_baseline = UnetBaselineD(shared_depth=opt['shared_depth'], use_vm_decoder=False, blocks=tuple([opt['num_blocks']] * 5), open_image=True)
     if para:
         net_baseline = net_baseline.to(0)
         net_baseline = nn.DataParallel(net_baseline, device_ids=[0,1], output_device=0)

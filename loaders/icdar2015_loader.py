@@ -14,7 +14,7 @@ import multiprocessing
 def get_list(dir, gt=False):
     ori_list = list(os.listdir(dir))
     res = []
-    mode = '.txt' if gt else '.JPG'
+    mode = '.txt' if gt else '.jpg'
     for file in ori_list:
         if os.path.splitext(file)[-1] == mode:
             res.append(file)
@@ -72,6 +72,7 @@ class IC15Loader(Dataset):
         ori_roots = []
         syn_gts = []
         for root in self.root:
+            # print(root)
             orilist = get_list(root)
             synlist = get_list(root + '_syn')
             syn_gtlist = get_list(root + '_syn_gt', gt=True)

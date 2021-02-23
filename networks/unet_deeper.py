@@ -37,6 +37,7 @@ class UnetDecoderD(nn.Module):
     def get_features(self, x, encoder_outs=None, mask=None, encoder_masks=None):
         lastx = x
         features = []
+        # print([w.shape for w in encoder_outs])
         for i, up_conv in enumerate(self.up_convs):
             # if isinstance(x, tuple):
             #     print(x)

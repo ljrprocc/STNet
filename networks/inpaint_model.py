@@ -6,7 +6,8 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 
 from networks.baselines import *
-from utils.inpaint_utils import *
+from utils.inpaint_utils import ContextualAttention
+
 # from utils.inpaint_utils import flow_to_image
 
 class GateConv2d(nn.Conv2d):
@@ -205,7 +206,8 @@ class Coarse2FineModel(nn.Module):
         self.conv_2s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
         self.bn2s.append(nn.InstanceNorm2d(self.hidden_channels * 4))
         # context attention
-        self.conv_2s.append(ContextAttention(ksize=3, stride=1, rate=2))
+        self.conv_2s.append(ContextualAttention(ksize=3, stride=1, rate=2, use_cuda=True))
+        self.bn2s.append(None)
         self.conv_2s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
         self.bn2s.append(nn.InstanceNorm2d(self.hidden_channels * 4))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
@@ -234,8 +236,9 @@ class Coarse2FineModel(nn.Module):
     def forward(self, x, xori, mask=None):
         x1 = x * mask.repeat(1,3,1,1) + xori * (1. - mask.repeat(1,3,1,1))
         xnow = x1
-        for conv in self.conv_1s:
+        for i, conv in enumerate(self.conv_1s):
             x1 = conv(x1)
+            x1 = self.bn1s[i](x1)
             x1 = self.gen_relu(x1)
             # print(x1.shape)
         # print(mask.shape)
@@ -252,6 +255,7 @@ class Coarse2FineModel(nn.Module):
             else:
                 # print(x2.shape)
                 x2 = conv(x2)
+                x2 = self.bn2s[i](x2)
                 # offsets = None
             x2 = self.gen_relu(x2) if i != 5 else self.relu(x2)
         # print(x1.shape, x2.shape)
@@ -263,6 +267,7 @@ class Coarse2FineModel(nn.Module):
             
             x = conv(x)
             if i < len(self.totals) - 1:
+                x = self.total_bns[i](x)
                 x = self.gen_relu(x)
         x = torch.tanh(x)
         # print(x[0, :, :, 0].mean(), x[0, :, :, 1].mean(), x[0, :, :, 2].mean())

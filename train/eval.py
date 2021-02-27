@@ -6,6 +6,7 @@ import math
 import time
 import torch
 import torch.nn as nn
+import parser
 from PIL import Image
 from torchvision import transforms
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
@@ -132,10 +133,21 @@ def test(test_loader, model, debug=False, baseline=False):
     print('FPS: {:.2f}'.format(l / total_time))
 
 
-def run():
+def run(opts):
     opt = load_globals(nets_path, globals(), override=True)
 
     base_net = init_nets(opt, nets_path, device, tag='25003x', open_image=image_encoder)
+    config_path = opts.config
+    opt = get_config(config_path)
+    train_loader, test_loader = init_loaders(opt)
+    gpu_id = opt['gpu_id']
+    device = 'cuda:%d'%(gpu_id)
+    # print()
+    TDBmode = opt['TDBmode'] == 'open'
+    nets_path = opt['ckpt_save_path']
+    images_path = opt['save_path']
+    image_encoder = opt['open_image'] == 'open'
+    gate = opt['gate_option'] == 'open'
     # base_net = InpaintModel(opt, nets_path, device, tag='14003x', gate=gate).to(device)
     # base_net.load(1100)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
@@ -144,6 +156,10 @@ def run():
 
 if __name__ == '__main__':
     multiprocessing.set_start_method('spawn', force=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='configs/icdar2015.yaml')
+    
+    opts = parser.parse_args()
     write_dir = '/data/jingru.ljr/AAAI2021/result/%s'%(train_tag)
     vis_path = os.path.join(write_dir, 'vis/')
     res_path = os.path.join(write_dir, 'res/')
@@ -156,4 +172,4 @@ if __name__ == '__main__':
         os.mkdir(res_path)
     if not os.path.exists(inpaint_path):
         os.mkdir(inpaint_path)
-    run()
+    run(opts)

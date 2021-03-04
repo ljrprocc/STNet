@@ -30,31 +30,45 @@ def weight_init(init_type='gaussian'):
     return init_fun
 
 class Discriminator(nn.Module):
-    def __init__(self, hidden_channels=64):
+    def __init__(self, hidden_channels=64, patch_size=128):
         super(Discriminator, self).__init__()
         self.hidden_channels = hidden_channels
         self.dis_convs = []
+        self.dis_bns = []
         # Build discriminator
         self.dis_convs.append(spectral_norm(nn.Conv2d(3, hidden_channels, kernel_size=5, stride=2, padding=2)))
+        self.dis_bns.append(nn.BatchNorm2d(hidden_channels))
         self.dis_convs.append(spectral_norm(nn.Conv2d(hidden_channels, hidden_channels*2, kernel_size=5, stride=2, padding=2)))
+        self.dis_bns.append(nn.BatchNorm2d(hidden_channels*2))
         self.dis_convs.append(spectral_norm(nn.Conv2d(hidden_channels*2, hidden_channels*4, kernel_size=5, stride=2, padding=2)))
-        self.dis_convs.append(spectral_norm(nn.Conv2d(hidden_channels*4, hidden_channels*4, kernel_size=5, stride=2, padding=2)))
-        self.dis_convs.append(spectral_norm(nn.Conv2d(hidden_channels*4, hidden_channels*4, kernel_size=5, stride=2, padding=2)))
-        self.dis_convs.append(spectral_norm(nn.Conv2d(hidden_channels*4, 1, kernel_size=3, stride=1, padding=1)))
+        self.dis_bns.append(nn.BatchNorm2d(hidden_channels*4))
+        self.dis_convs.append(spectral_norm(nn.Conv2d(hidden_channels*4, hidden_channels*8, kernel_size=5, stride=2, padding=2)))
+        self.dis_bns.append(nn.BatchNorm2d(hidden_channels * 8))
+        # self.dis_convs.append(spectral_norm(nn.Conv2d(hidden_channels*4, hidden_channels*4, kernel_size=5, stride=2, padding=2)))
+        # self.dis_convs.append(spectral_norm(nn.Conv2d(hidden_channels*4, 1, kernel_size=3, stride=1, padding=1)))
         self.dis_convs = nn.ModuleList(self.dis_convs)
+        self.dis_bns = nn.ModuleList(self.dis_bns)
+        now_size = patch_size // (2 ** len(self.dis_convs))
+        self.linear = nn.Linear(now_size * now_size * 8 * hidden_channels, 1)
         # self.flatten = nn.Flatten()
         self.relu = nn.LeakyReLU(0.2)
 
     def forward(self, x):
-        for conv in self.dis_convs:
+        for i, conv in enumerate(self.dis_convs):
             # print(x.shape)
             x = conv(x)
             # print(x.shape)
-            if conv.out_channels != 1:
-                x = self.relu(x)
-        out = torch.flatten(x)
+            # if conv.out_channels != 1:
+            x = self.dis_bns[i](x)
+            x = self.relu(x)
+        x = x.view(x.size()[0], -1)
+        x = self.linear(x)
+        # x = torch.tanh(x)
+        # x = torch.clamp(self.relu(x), min=-1., max=1.)
+        # print(x)
+        # out = torch.flatten(x)
         # out = torch.sigmoid(out)
-        return out
+        return x
 
 
 class InpaintModel(nn.Module):
@@ -68,11 +82,18 @@ class InpaintModel(nn.Module):
         # print(self.generator)
         self.gen_only = gen_only
         self.net_path = net_path
+        self.use_coarse = opt['open_image'] == 'open'
         self.tag = tag
         self.device = device
         self.set_optimizers(tag=='')
+        print('**Parameter calculation:')
+        print('# mask_generator parameters:', sum(param.numel() for param in self.mask_generator.parameters()))
+        print('# Generator parameters:', sum(param.numel() for param in self.generator.parameters()))
+        print('# Discriminator parameters:', sum(param.numel() for param in self.discriminator.parameters()))
+        # self.update_device(device)
         if tag != '':
-            self.load(int(tag))
+            if not gen_only:
+                self.load(int(tag))
 
     def update_device(self, device):
         self.discriminator = self.discriminator.to(device)
@@ -100,34 +121,54 @@ class InpaintModel(nn.Module):
             set_requires_grad(self.discriminator, True)
             results_mask_gen = self.mask_generator(x)
             corase_image, result_mask = results_mask_gen[0], results_mask_gen[1]
-            x_out, offsests = self.generator(corase_image.detach(), xori=x, mask=result_mask.detach())
-            hard_mask = (result_mask.detach().repeat(1,3,1,1) > 0.9).float()
+            # print(torch.mean(corase_image))
+            # print(torch.mean(x))
+            hard_mask = (result_mask.repeat(1,3,1,1) > 0.9).float()
+            x_out, offsests = self.generator(corase_image if self.use_coarse else x, xori=x, mask=result_mask)
+            # print(torch.mean(corase_image), torch.mean(result_mask))
+            # print(torch.mean(x))
+            # print(torch.mean(x_out))
+            
+            hard_mask = result_mask
             fine_image = x_out * hard_mask + x * (1 - hard_mask)
             # discriminator loss
             dis_input_real = x_real
-            # dis_input_fake = fine_image.detach()
             dis_input_fake = fine_image.detach()
+            # dis_input_fake = x_out.detach()
+            # print(torch.mean(dis_input_real), torch.mean(dis_input_fake))
             dis_real = self.discriminator(dis_input_real)
             dis_fake = self.discriminator(dis_input_fake)
+            # print(torch.mean(dis_real), torch.mean(dis_fake))
             # print(dis_fake)
+            # print(torch.mean(fine_image))
             dis_real_loss = self.adversial_loss(dis_real, True, True)
             dis_fake_loss = self.adversial_loss(dis_fake, False, True)
             # print(dis_real_loss, dis_fake_loss)
             dis_loss += (dis_real_loss + dis_fake_loss) / 2
+            # print(torch.mean(corase_image - x))
         elif update=='gen':
             set_requires_grad(self.mask_generator, False)
             set_requires_grad(self.generator, True)
             set_requires_grad(self.discriminator, False)
             results_mask_gen = self.mask_generator(x)
             corase_image, result_mask = results_mask_gen[0], results_mask_gen[1]
-            x_out, offsests = self.generator(corase_image, xori=x, mask=result_mask)
             hard_mask = (result_mask.repeat(1,3,1,1) > 0.9).float()
+            x_out, offsests = self.generator(corase_image if self.use_coarse else x, xori=x, mask=result_mask)
+            # print(torch.mean(x))
+            # print(torch.mean(corase_image), torch.mean(result_mask))
+            # hard_mask = (result_mask.repeat(1,3,1,1) > 0.8).float()
+            # hard_mask = result_mask
             fine_image = x_out * hard_mask + x * (1 - hard_mask)
+            # print(torch.mean(fine_image), torch.mean(x_out))
+
             gen_input_fake = fine_image
+            # gen_input_fake = x_out
             gen_fake = self.discriminator(gen_input_fake)
             gen_gan_loss = self.adversial_loss(gen_fake, True, False)
             # print(gen_gan_loss)
             gen_loss += gen_gan_loss
+            # print(x_out)
+            return x_out, gen_loss, fine_image, result_mask, corase_image, offsests
         else:
             # set_requires_grad(self.mask_generator, False)
             # set_requires_grad(self.mask_generator.mask_decoder, True)
@@ -136,8 +177,12 @@ class InpaintModel(nn.Module):
             set_requires_grad(self.discriminator, False)
             results_mask_gen = self.mask_generator(x)
             corase_image, result_mask = results_mask_gen[0], results_mask_gen[1]
-            x_out, offsests = self.generator(corase_image, xori=x, mask=result_mask)
-            hard_mask = (result_mask.repeat(1,3,1,1) > 0.9).float()
+            hard_mask = (result_mask.repeat(1,3,1,1) > 0.8).float()
+            x_out, offsests = self.generator(corase_image if self.use_coarse else x, xori=x, mask=result_mask)
+            # print(torch.mean(x))
+            # hard_mask = result_mask
+            # print(torch.mean(corase_image), torch.mean(hard_mask))
+            
             fine_image = x_out * hard_mask + x * (1 - hard_mask)
             return x_out, fine_image, dis_loss, result_mask, corase_image, offsests
 
@@ -167,11 +212,11 @@ class InpaintModel(nn.Module):
             lr = 0.0002,
             betas = (0.0, 0.99)
         )
-        if self.gen_only:
-            for para in self.mask_generator.parameters():
-                para.requires_grad = False
-        else:
-            self.mask_generator.set_optimizers()
+        # if self.gen_only:
+        #     for para in self.mask_generator.parameters():
+        #         para.requires_grad = False
+        # else:
+        #     self.mask_generator.set_optimizers()
             # Default finetune
             # for para in self.mask_generator.shared_decoder.parameters():
             #     para.requires_grad = False
@@ -183,6 +228,15 @@ class InpaintModel(nn.Module):
         else:
             self.generator.apply(weight_init('kaiming'))
             self.discriminator.apply(weight_init('kaiming'))
+
+    def translate_simple(self, x):
+        results_mask_gen = self.mask_generator(x)
+        corase_image, result_mask = results_mask_gen[0], results_mask_gen[1]
+        # print(torch.mean(corase_image - x))
+        x_out, offsests = self.generator(corase_image if self.use_coarse else x, xori=x, mask=result_mask)
+        hard_mask = (result_mask.repeat(1,3,1,1) > 0.8).float()
+        fine_image = x_out * hard_mask + x * (1 - hard_mask)
+        return x_out, fine_image, corase_image, result_mask
 
     def load(self, epoch):
         appendix = 'g' if self.gate else ''

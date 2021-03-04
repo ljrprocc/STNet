@@ -76,11 +76,11 @@ def test(test_loader, model, debug=False, baseline=False):
             write_inpaint_path = '%s/%s'%(inpaint_path, jpg_name)
             
             guess_images, guess_mask = output[0], output[-1]
-            real_img = img.data.squeeze().cpu().numpy().copy()
-            real_img = np.transpose(real_img, (1,2,0)) * [0.229, 0.224, 0.225] + [0.485, 0.456, 0.406]
-            real_img = np.around(real_img * 255).astype("uint8")
-            # real_img = torch.clamp(img.data, min=-1, max=1)
-            # real_img = real_img.squeeze().cpu().numpy().copy() / 2 + 0.5
+            # real_img = img.data.squeeze().cpu().numpy().copy()
+            # real_img = np.transpose(real_img, (1,2,0)) * [0.229, 0.224, 0.225] + [0.485, 0.456, 0.406]
+            # real_img = np.around(real_img * 255).astype("uint8")
+            real_img = torch.clamp(img.data, min=-1, max=1)
+            real_img = real_img.squeeze().cpu().numpy().copy() / 2 + 0.5
             # print(real_img.shape)
             # exit(-1)
             # real_img = np.transpose(real_img, (1,2,0)) * 255
@@ -90,7 +90,7 @@ def test(test_loader, model, debug=False, baseline=False):
             l += lens
             b = time.time()
             expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
-            transformed_guess_mask = expanded_guess_mask * 2 - 1
+            transformed_guess_mask = expandded_guess_mask * 2 - 1
             expanded_predicted_mask = (expanded_guess_mask > 0.9).float()
             transformed_predicted_mask = expanded_predicted_mask * 2 - 1
             total_time = total_time + (b - a)
@@ -134,9 +134,6 @@ def test(test_loader, model, debug=False, baseline=False):
 
 
 def run(opts):
-    opt = load_globals(nets_path, globals(), override=True)
-
-    base_net = init_nets(opt, nets_path, device, tag='25003x', open_image=image_encoder)
     config_path = opts.config
     opt = get_config(config_path)
     train_loader, test_loader = init_loaders(opt)
@@ -148,11 +145,14 @@ def run(opts):
     images_path = opt['save_path']
     image_encoder = opt['open_image'] == 'open'
     gate = opt['gate_option'] == 'open'
+    opt = load_globals(nets_path, globals(), override=True)
+
+    base_net = init_nets(opt, nets_path, device, tag='25003x', open_image=image_encoder)
     # base_net = InpaintModel(opt, nets_path, device, tag='14003x', gate=gate).to(device)
     # base_net.load(1100)
     train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
 
-    test(test_loader, base_net, debug=True)
+    test(test_loader, base_net, debug=True, opt=opt)
 
 if __name__ == '__main__':
     multiprocessing.set_start_method('spawn', force=True)

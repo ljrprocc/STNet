@@ -198,13 +198,13 @@ class PUnetBaseline(nn.Module):
                                                is_final=False, is_pconv=True)
 
     def set_optimizers(self):
-        self.optimizer_encoder = torch.optim.Adam(self.encoder.parameters(), lr=0.001)
-        self.optimizer_image = torch.optim.Adam(self.image_decoder.parameters(), lr=0.001)
-        self.optimizer_mask = torch.optim.Adam(self.mask_decoder.parameters(), lr=0.001)
+        self.optimizer_encoder = torch.optim.Adam(self.encoder.parameters(), lr=0.0001)
+        self.optimizer_image = torch.optim.Adam(self.image_decoder.parameters(), lr=0.0001)
+        self.optimizer_mask = torch.optim.Adam(self.mask_decoder.parameters(), lr=0.0001)
         if self.vm_decoder is not None:
             self.optimizer_vm = torch.optim.Adam(self.vm_decoder.parameters(), lr=0.001)
         if self.shared != 0:
-            self.optimizer_shared = torch.optim.Adam(self.shared_decoder.parameters(), lr=0.001)
+            self.optimizer_shared = torch.optim.Adam(self.shared_decoder.parameters(), lr=0.0001)
         self.apply(weight_init('kaiming'))
 
     def zero_grad_all(self):

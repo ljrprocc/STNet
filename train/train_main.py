@@ -13,9 +13,10 @@ import argparse
 
 
 
-def l1_relative(reconstructed, real, batch, area):
+def l1_relative(reconstructed, real, area):
+    batch = real.size()[0]
     loss_l1 = torch.abs(reconstructed - real).view(batch, -1)
-    loss_l1 = torch.sum(loss_l1, dim=1) / area
+    loss_l1 = torch.sum(loss_l1, dim=1) / (area + 1e-8)
     loss_l1 = torch.sum(loss_l1) / batch
     return loss_l1
 
@@ -39,58 +40,70 @@ def dice_loss(predict, target):
 #     loss = dice_criterion(guess_mask, vm_mask, selected_masks)
 #     return loss, selected_masks
 
-def train_iim(model, synthesized, vm_mask,images, vgg_feas, per, opt):
+def train_iim(model, synthesized, vm_mask,images, vgg_feas, per, opt, style=None):
+    critic_iter = opt['critic_iter']
+    mask_iter = opt['mask_iter']
     # Dis update
     model.discriminator.zero_grad()
     guess_images, _, dis_loss, guess_mask, coarse_images, off = model(synthesized, 'dis', x_real=images)
     l =  opt['lamda_dis'] * dis_loss
+    # print(torch.mean(guess_images), torch.mean(coarse_images))
     # print(l, dis_loss)
     l.backward()
     model.dis_optimzer.step()
+    for i in range(critic_iter):
     # Gen update
-    model.generator.zero_grad()
-    guess_images, gen_loss, _, guess_mask, coarse_images, off = model(synthesized, 'gen')
-    # print(off.shape)
-    expanded_vm_mask = vm_mask.repeat(1, 3, 1, 1)
-    expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
-    reconstructed_pixels = guess_images * expanded_vm_mask
-    reconstructed_images = synthesized * (1 - expanded_vm_mask) + reconstructed_pixels
-    real_pixels = images * expanded_vm_mask
-    loss_l1_recon = l1_loss(reconstructed_pixels, real_pixels)
-    loss_l1_outer = l1_loss(guess_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
-    loss_all = l1_loss(reconstructed_images, images)
-    loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas(images))
+        model.generator.zero_grad()
+        area = torch.sum(vm_mask)
+        guess_images, gen_loss, fine_image, guess_mask, coarse_images, off = model(synthesized, 'gen')
+        # print(off.shape)
+        expanded_vm_mask = vm_mask.repeat(1, 3, 1, 1)
+        expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
+        reconstructed_pixels = guess_images * expanded_vm_mask
+        reconstructed_images = synthesized * (1 - expanded_vm_mask) + reconstructed_pixels
+        real_pixels = images * expanded_vm_mask
+        loss_l1_recon = l1_loss(reconstructed_pixels, real_pixels)
+        loss_l1_outer = l1_loss(reconstructed_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
+        # loss_all = l1_loss(reconstructed_images, images)
+        loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas(images))
+        loss_style = style(vgg_feas(reconstructed_images), vgg_feas(images))
+        # print(loss_l1_recon, loss_l1_outer, gen_loss)
+        # print(torch.mean(coarse_images), torch.mean(guess_mask), torch.mean(vm_mask))
+        loss = opt['lamda_rec'] * loss_l1_recon + opt['lamda_valid'] * loss_l1_outer + opt['lamda_gen'] * gen_loss + opt['lamda_per']*loss_perceptual + opt['lamda_style'] * loss_style
+        # loss.requires_grad_()
+        loss.backward()
+        model.gen_optimzer.step()
+        # Mask update
+        model.mask_generator.zero_grad_all()
+        # model.generator.zero_grad()
+        mask_total_loss = 0.0
+        # print(torch.sum(vm_mask), torch.sum())
+        for j in range(mask_iter):
+            guess_images, fine_image, _, guess_mask, coarse_images, off = model(synthesized, 'mask')
+            expanded_vm_mask = vm_mask.repeat(1, 3, 1, 1)
+            expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
+            reconstructed_pixels = guess_images * expanded_vm_mask
+            reconstructed_images = synthesized * (1 - expanded_vm_mask) + reconstructed_pixels
+            real_pixels = images * expanded_vm_mask
+            # print(l1_loss(reconstructed_pixels, real_pixels))
+            # print(l1_relative(coarse_images * expanded_vm_mask, real_pixels, area))
+            loss_l1_recon = l1_loss(coarse_images * expanded_vm_mask, real_pixels) if model.use_coarse else 0.0
+            loss_l1_outer = l1_loss(coarse_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask)) if model.use_coarse else 0.0
+            # print(l1_loss(guess_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask)), l1_loss(coarse_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask)))
 
-    loss = opt['lamda_rec']*loss_all + opt['lamda_gen'] * gen_loss + opt['lamda_per']*loss_perceptual 
-    loss.requires_grad_()
-    loss.backward()
-    model.gen_optimzer.step()
-    # Mask update
-    model.mask_generator.zero_grad_all()
-    # model.generator.zero_grad()
-    guess_images, fine_image, _, guess_mask, coarse_images, off = model(synthesized, 'mask')
-    expanded_vm_mask = vm_mask.repeat(1, 3, 1, 1)
-    expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
-    reconstructed_pixels = fine_image * expanded_vm_mask
-    reconstructed_images = synthesized * (1 - expanded_vm_mask) + reconstructed_pixels
-    real_pixels = images * expanded_vm_mask
-    # print(l1_loss(coarse_images * expanded_vm_mask, real_pixels))
-    loss_l1_recon = l1_loss(reconstructed_pixels, real_pixels) + l1_loss(coarse_images * expanded_vm_mask, real_pixels)
-    loss_l1_outer = l1_loss(fine_image * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask)) + l1_loss(coarse_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
-    # print(l1_loss(guess_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask)), l1_loss(coarse_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask)))
-
-    # loss_all = l1_loss(reconstructed_images, images)
-    loss_mask = nn.BCELoss()(guess_mask, vm_mask)
-    # print(loss_mask)
-    loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas
-    (images))
-    print(loss_mask, loss_l1_outer, loss_l1_recon)
-    mask_total_loss = loss_mask + opt['lamda_rec'] * loss_l1_recon + opt['lamda_valid'] * loss_l1_outer + opt['lamda_per'] * loss_perceptual
-    mask_total_loss.backward()
-    # model.gen_optimzer.step()
-    model.mask_generator.step_all()
-    # model.mask_generator.optimizer_encoder.step()
-    # model.mask_generator.optimizer_image.step()
+            # loss_all = l1_loss(reconstructed_images, images)
+            loss_mask = nn.BCELoss()(guess_mask, vm_mask)
+            # loss_mask = dice_loss(guess_mask, vm_mask)
+            # print(loss_mask)
+            loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas
+            (images))
+            # print(loss_mask, loss_l1_outer, loss_l1_recon)
+            mask_total_loss = loss_mask + opt['lamda_rec'] * loss_l1_recon + opt['lamda_valid'] * loss_l1_outer + opt['lamda_per'] * loss_perceptual
+            mask_total_loss.backward()
+            # model.gen_optimzer.step()
+            model.mask_generator.step_all()
+        # model.mask_generator.optimizer_encoder.step()
+        # model.mask_generator.optimizer_image.step()
 
     return l, loss, gen_loss, mask_total_loss
 
@@ -167,7 +180,7 @@ def train(net, train_loader, test_loader, opts):
                     net.step_all()
                     losses.append(loss.item())
                 else:
-                    dis_loss, gen_loss, l, mask_loss = train_iim(net, synthesized, vm_mask, images, vgg_feas, per, opts)
+                    dis_loss, gen_loss, l, mask_loss = train_iim(model=net, synthesized=synthesized, vm_mask=vm_mask, images=images, vgg_feas=vgg_feas, per=per, opt=opts, style=style)
                     D_losses.append(dis_loss.item())
                     G_losses.append(gen_loss.item())
             train_tag = opts['training_name']
@@ -185,15 +198,18 @@ def train(net, train_loader, test_loader, opts):
                     writer.add_scalar('dis_loss', dis_loss, global_step=total_iter)
                     writer.add_scalar('gen_loss', gen_loss, global_step=total_iter)
                     writer.add_scalar('generator_loss', l, global_step=total_iter)
-                    print('%s [%d, %3d], D loss: %.4f, G loss: %.4f, mask_loss: %.4f' % (train_tag, real_epoch, batch_size * (i + 1), torch.mean(dis_loss), torch.mean(gen_loss), torch.mean(mask_loss)))
+                    if opts['mask_iter'] > 0:
+                        print('%s [%d, %3d], D loss: %.4f, G loss: %.4f, mask_loss: %.4f' % (train_tag, real_epoch, batch_size * (i + 1), torch.mean(dis_loss), torch.mean(gen_loss), torch.mean(mask_loss)))
+                    else:
+                        print('%s [%d, %3d], D loss: %.4f, G loss: %.4f' % (train_tag, real_epoch, batch_size * (i + 1), torch.mean(dis_loss), torch.mean(gen_loss)))
                 losses = []
                 style_losses = []
         # savings
         if real_epoch % save_frequency == 0:
             print("checkpointing...")
             gate_str = 'g' if gate else ''
-            image_name = '%s/%s_%d%s_coarse.png' % (images_path, train_tag, real_epoch, gate_str)
-            _ = save_test_images(net, test_loader, image_name, device, image_decoder=True)
+            image_name = '%s/%s_%d%s_fine.png' % (images_path, train_tag, real_epoch, gate_str)
+            _ = save_test_images(net, test_loader, image_name, device, image_decoder=opts['open_image'] == 'open')
             if not TDBmode and not os.path.exists('%s/epoch%d'%(nets_path, real_epoch)):
                 os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
             if not TDBmode:
@@ -222,15 +238,16 @@ def run(opts):
     images_path = opt['save_path']
     image_encoder = opt['open_image'] == 'open'
     gate = opt['gate_option'] == 'open'
+    gen_only = opt['gen_only'] == 'open'
     init_folders(nets_path, images_path)
     if TDBmode:
     # print(len(train_loader))
         base_net = init_nets(opt, nets_path, device, open_image=image_encoder, tag='')
     # pretrain_path = '%s/checkpoints/icdar_total3x_per/' % (root_path)
     else:
-        base_net = InpaintModel(opt, nets_path, device, tag='', gate=gate).to(device)
-    # if not TDBmode:
-    #     base_net.load(200)
+        base_net = InpaintModel(opt, nets_path, device, tag='1750', gate=gate, gen_only=gen_only).to(device)
+    # if (not TDBmode and gen_only):
+    #     base_net.load(250)
     train(base_net, train_loader, test_loader, opt)
 
 

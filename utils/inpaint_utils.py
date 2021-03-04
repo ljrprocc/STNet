@@ -422,7 +422,7 @@ class ContextualAttention(nn.Module):
         m = m.permute(0, 4, 1, 2, 3)    # m shape: [N, L, C, k, k]
         m = m[0]    # m shape: [L, C, k, k]
         # mm shape: [L, 1, 1, 1]
-        mm = (reduce_mean(m, axis=[1, 2, 3], keepdim=True)>0.8).to(torch.float32)
+        mm = (reduce_mean(m, axis=[1, 2, 3], keepdim=True)>0.5).to(torch.float32)
         mm = mm.permute(1, 0, 2, 3) # mm shape: [1, L, 1, 1]
 
         y = []

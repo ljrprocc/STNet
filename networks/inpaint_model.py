@@ -174,9 +174,9 @@ class Coarse2FineModel(nn.Module):
         # Stage 2, conv branch
         self.conv_1s = []
         self.bn1s = []
-        self.conv_1s.append(nn.Conv2d(3, self.hidden_channels, 5, 1, padding=1))
+        self.conv_1s.append(nn.Conv2d(3, self.hidden_channels, 5, 2, padding=2))
         self.bn1s.append(nn.InstanceNorm2d(self.hidden_channels))
-        self.conv_1s.append(nn.Conv2d(self.hidden_channels, self.hidden_channels, 3, 2, padding=1))
+        self.conv_1s.append(nn.Conv2d(self.hidden_channels, self.hidden_channels, 3, 1, padding=1))
         self.bn1s.append(nn.InstanceNorm2d(self.hidden_channels))
         self.conv_1s.append(nn.Conv2d(self.hidden_channels, self.hidden_channels*2, 3, 1, padding=1))
         self.bn1s.append(nn.InstanceNorm2d(self.hidden_channels * 2))
@@ -193,9 +193,9 @@ class Coarse2FineModel(nn.Module):
         # Stage 2, attention branch
         self.conv_2s = []
         self.bn2s = []
-        self.conv_2s.append(nn.Conv2d(3, self.hidden_channels, 5, 1, padding=2))
+        self.conv_2s.append(nn.Conv2d(3, self.hidden_channels, 5, 2, padding=2))
         self.bn2s.append(nn.InstanceNorm2d(self.hidden_channels))
-        self.conv_2s.append(nn.Conv2d(self.hidden_channels, self.hidden_channels, 3, 2, padding=1))
+        self.conv_2s.append(nn.Conv2d(self.hidden_channels, self.hidden_channels, 3, 1, padding=1))
         self.bn2s.append(nn.InstanceNorm2d(self.hidden_channels))
         self.conv_2s.append(nn.Conv2d(self.hidden_channels, 2*self.hidden_channels, 3, 1, padding=1))
         self.bn2s.append(nn.InstanceNorm2d(self.hidden_channels * 2))
@@ -221,10 +221,12 @@ class Coarse2FineModel(nn.Module):
         self.totals.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*4, 3, 1, padding=1))
         self.total_bns.append(nn.InstanceNorm2d(self.hidden_channels * 4))
         self.totals.append(nn.ConvTranspose2d(self.hidden_channels*4, self.hidden_channels*2, 4, 2, padding=1))
+        # self.totals.append(nn.Conv2d(self.hidden_channels*4, self.hidden_channels*2, 3, 1, padding=1))
         self.total_bns.append(nn.InstanceNorm2d(self.hidden_channels * 2))
         self.totals.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*2, 3, 1, padding=1))
         self.total_bns.append(nn.InstanceNorm2d(self.hidden_channels * 2))
         self.totals.append(nn.ConvTranspose2d(self.hidden_channels*2, self.hidden_channels*2, 4, 2, padding=1))
+        # self.totals.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels*2, 3, 1, padding=1))
         self.total_bns.append(nn.InstanceNorm2d(self.hidden_channels * 2))
         self.totals.append(nn.Conv2d(self.hidden_channels*2, self.hidden_channels, 3, 1, padding=1))
         self.total_bns.append(nn.InstanceNorm2d(self.hidden_channels))
@@ -235,7 +237,9 @@ class Coarse2FineModel(nn.Module):
 
     def forward(self, x, xori, mask=None):
         x1 = x * mask.repeat(1,3,1,1) + xori * (1. - mask.repeat(1,3,1,1))
+        # x1 = xori * (1. - mask.repeat(1,3,1,1))
         xnow = x1
+        # print(x1.shape)
         for i, conv in enumerate(self.conv_1s):
             x1 = conv(x1)
             x1 = self.bn1s[i](x1)
@@ -264,9 +268,11 @@ class Coarse2FineModel(nn.Module):
             # if i == 2 or i == 4:
             #     x = F.upsample(x, scale_factor=2)
             # print(x.shape)
-            
+            # print(x.shape)
             x = conv(x)
             if i < len(self.totals) - 1:
+                # if i % 3 == 2:
+                #     x = torch.nn.functional.upsample(x, scale_factor=2.)
                 x = self.total_bns[i](x)
                 x = self.gen_relu(x)
         x = torch.tanh(x)

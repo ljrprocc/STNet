@@ -303,7 +303,7 @@ def init_nets(opt, net_path, device, tag='', para=False):
     return net_baseline
 
 
-def save_test_images(net, loader, image_name, device, image_decoder=True, writer=None):
+def save_test_images(net, loader, image_name, device, image_decoder=True, writer=None, TDB_mode=True):
     with torch.no_grad():
         net.eval()
         synthesized, images, vm_mask, vm_area, _ = next(iter(loader))
@@ -315,26 +315,31 @@ def save_test_images(net, loader, image_name, device, image_decoder=True, writer
         images = images.to(device)
         expanded_real_mask = vm_mask.repeat(1, 3, 1, 1)
         # output = net(synthesized, 1 - expanded_real_mask)
-        output = net.translate_simple(synthesized)
+        
         # print(output[0].shape)
         # exit(-1)
-        # guess_images, guess_mask = output[0], output[-1]
-        guess_images, guess_mask, coarse_image = output[0], output[-1], output[2]
+        if TDB_mode:
+            output = net(synthesized)
+            guess_images, guess_mask = output[0], output[-1]
+            coarse_image = guess_images
+        else:
+            output = net.translate_simple(synthesized)
+            guess_images, guess_mask, coarse_image = output[0], output[-1], output[2]
         # print(guess_mask)
         expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
-        # if image_decoder:
-        print(torch.mean(guess_images, (0,2,3)))
+        if image_decoder:
+            print(torch.mean(guess_images, (0,2,3)))
             # debug
             # for i in range(guess_images.shape[0]):
             #     a = guess_images[i, 0, :, :].cpu().numpy()
             #     b = guess_images[i, 1, :, :].cpu().numpy()
             #     c = guess_images[i, 2, :, :].cpu().numpy()
             #     print(np.corrcoef(a, b), np.corrcoef(a, c), np.corrcoef(b, c))
-        expanded_predicted_mask = (expanded_guess_mask > 0.7).float()
-        reconstructed_pixels = guess_images * expanded_predicted_mask
-        reconstructed_images = synthesized * (1 - expanded_predicted_mask) + reconstructed_pixels
+            expanded_predicted_mask = (expanded_guess_mask > 0.7).float()
+            reconstructed_pixels = guess_images * expanded_predicted_mask
+            reconstructed_images = synthesized * (1 - expanded_predicted_mask) + reconstructed_pixels
             # print(vm_mask.shape, expanded_real_mask.shape, images.shape)
-        real_pixels = images * expanded_real_mask
+            real_pixels = images * expanded_real_mask
         transformed_guess_mask = expanded_guess_mask * 2 - 1
         expanded_real_mask = expanded_real_mask * 2 - 1
         # transformed_predicted_mask = expanded_predicted_mask * 2 - 1
@@ -351,7 +356,7 @@ def save_test_images(net, loader, image_name, device, image_decoder=True, writer
             if image_decoder:
                 images_un = (torch.cat((synthesized, reconstructed_images, guess_images, transformed_guess_mask, expanded_real_mask, coarse_image), 0))
             else:
-                images_un = (torch.cat((synthesized, transformed_guess_mask, expanded_real_mask, reconstructed_images, guess_images), 0))
+                images_un = (torch.cat((synthesized, transformed_guess_mask, expanded_real_mask), 0))
         # print(torch.sum(guess_mask), torch.sum(vm_mask))
         images_un = torch.clamp(images_un.data, min=-1, max=1)
         images_un = make_grid(images_un, nrow=synthesized.shape[0], padding=5, pad_value=1)

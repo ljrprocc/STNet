@@ -75,9 +75,9 @@ class InpaintModel(nn.Module):
     def __init__(self, opt, net_path, device, tag='', gen_only=True, gate=False):
         super(InpaintModel, self).__init__()
         self.adversial_loss = AdversialLoss('lsgan')
-        self.discriminator = Discriminator(opt['gen']['hidden_channels'])
+        self.discriminator = Discriminator(opt['gen']['hidden_channels'], patch_size=opt['patch_size'])
         self.mask_generator = init_nets(opt, net_path, device, tag)
-        self.generator = Coarse2FineModel(opt['dis']['hidden_channels']) if not gate else GatedCoarse2FineModel(opt['dis']['hidden_channels'])
+        self.generator = Coarse2FineModel(opt['dis']['hidden_channels'], opt['dilation_depth']) if not gate else GatedCoarse2FineModel(opt['dis']['hidden_channels'], opt['dilation_depth'])
         self.gate = gate
         # print(self.generator)
         self.gen_only = gen_only
@@ -99,6 +99,52 @@ class InpaintModel(nn.Module):
         self.discriminator = self.discriminator.to(device)
         self.mask_generator = self.mask_generator.to(device)
         self.generator = self.generator.to(device)
+    
+    def dis_gen_forward(self, x, x_real=None):
+        # Only support critic_iter=1
+        self.discriminator.zero_grad()
+        set_requires_grad(self.mask_generator, False)
+        # set_requires_grad(self.generator, False)
+        # set_requires_grad(self.discriminator, True)
+        results_mask_gen = self.mask_generator(x)
+        corase_image, result_mask = results_mask_gen[0], results_mask_gen[1]
+        # print(torch.mean(corase_image))
+        # print(torch.mean(x))
+        hard_mask = (result_mask.repeat(1,3,1,1) > 0.9).float()
+        x_out, offsests = self.generator(corase_image if self.use_coarse else x, xori=x, mask=result_mask)
+        # print(torch.mean(corase_image), torch.mean(result_mask))
+        # print(torch.mean(x))
+        # print(torch.mean(x_out))
+            
+        hard_mask = result_mask
+        fine_image = x_out * hard_mask + x * (1 - hard_mask)
+        # discriminator loss
+        dis_input_real = x_real
+        dis_input_fake = fine_image
+        # dis_input_fake = x_out.detach()
+        # print(torch.mean(dis_input_real), torch.mean(dis_input_fake))
+        dis_real = self.discriminator(dis_input_real)
+        dis_fake = self.discriminator(dis_input_fake.detach())
+        # print(torch.mean(dis_real), torch.mean(dis_fake))
+        # print(dis_fake)
+        # print(torch.mean(fine_image))
+        dis_real_loss = self.adversial_loss(dis_real, True, True)
+        dis_real_loss.backward()
+        dis_fake_loss = self.adversial_loss(dis_fake, False, True)
+        dis_fake_loss.backward()
+        # print(dis_real_loss, dis_fake_loss)
+        dis_loss = (dis_real_loss + dis_fake_loss) / 2
+        self.dis_optimzer.step()
+        self.generator.zero_grad()
+        # set_requires_grad(self.generator, True)
+        # set_requires_grad(self.discriminator, False)
+        gen_fake = self.discriminator(dis_input_fake)
+        gen_gan_loss = self.adversial_loss(gen_fake, True, False)
+        # print(gen_gan_loss)
+        gen_loss = gen_gan_loss
+        return x_out, gen_loss, dis_loss, result_mask, corase_image, offsests
+
+
 
     def forward(self, x, update='gen', x_real=None):
         assert update in ['gen', 'dis', 'mask']
@@ -133,11 +179,11 @@ class InpaintModel(nn.Module):
             fine_image = x_out * hard_mask + x * (1 - hard_mask)
             # discriminator loss
             dis_input_real = x_real
-            dis_input_fake = fine_image.detach()
+            dis_input_fake = fine_image
             # dis_input_fake = x_out.detach()
             # print(torch.mean(dis_input_real), torch.mean(dis_input_fake))
             dis_real = self.discriminator(dis_input_real)
-            dis_fake = self.discriminator(dis_input_fake)
+            dis_fake = self.discriminator(dis_input_fake.detach())
             # print(torch.mean(dis_real), torch.mean(dis_fake))
             # print(dis_fake)
             # print(torch.mean(fine_image))

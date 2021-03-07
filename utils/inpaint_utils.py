@@ -146,11 +146,11 @@ def pt_flow_to_image(flow):
     minv = torch.tensor(999)
     maxrad = torch.tensor(-1)
     if torch.cuda.is_available():
-        maxu = maxu.cuda()
-        maxv = maxv.cuda()
-        minu = minu.cuda()
-        minv = minv.cuda()
-        maxrad = maxrad.cuda()
+        maxu = maxu.to(flow.device)
+        maxv = maxv.to(flow.device)
+        minu = minu.to(flow.device)
+        minv = minv.to(flow.device)
+        maxrad = maxrad.to(flow.device)
     for i in range(flow.shape[0]):
         u = flow[i, 0, :, :]
         v = flow[i, 1, :, :]
@@ -241,14 +241,14 @@ def pt_compute_color(u, v):
     h, w = u.shape
     img = torch.zeros([3, h, w])
     if torch.cuda.is_available():
-        img = img.cuda()
+        img = img.to(u.device)
     nanIdx = (torch.isnan(u) + torch.isnan(v)) != 0
     u[nanIdx] = 0.
     v[nanIdx] = 0.
     # colorwheel = COLORWHEEL
     colorwheel = pt_make_color_wheel()
     if torch.cuda.is_available():
-        colorwheel = colorwheel.cuda()
+        colorwheel = colorwheel.to(u.device)
     ncols = colorwheel.size()[0]
     rad = torch.sqrt((u ** 2 + v ** 2).to(torch.float32))
     a = torch.atan2(-v.to(torch.float32), -u.to(torch.float32)) / np.pi
@@ -408,7 +408,7 @@ class ContextualAttention(nn.Module):
         if mask is None:
             mask = torch.zeros([int_bs[0], 1, int_bs[2], int_bs[3]])
             if self.use_cuda:
-                mask = mask.cuda()
+                mask = mask.to(f.device)
         else:
             mask = F.interpolate(mask, scale_factor=1./(4*self.rate), mode='nearest')
         int_ms = list(mask.size())
@@ -431,7 +431,7 @@ class ContextualAttention(nn.Module):
         scale = self.softmax_scale    # to fit the PyTorch tensor image value range
         fuse_weight = torch.eye(k).view(1, 1, k, k)  # 1*1*k*k
         if self.use_cuda:
-            fuse_weight = fuse_weight.cuda()
+            fuse_weight = fuse_weight.to(f.device)
 
         for xi, wi, raw_wi in zip(f_groups, w_groups, raw_w_groups):
             '''
@@ -444,7 +444,8 @@ class ContextualAttention(nn.Module):
             # conv for compare
             escape_NaN = torch.cuda.FloatTensor([1e-4])
             if self.use_cuda:
-                escape_NaN = escape_NaN.cuda()
+                escape_NaN = escape_NaN.to(f.device)
+            # print(escape_NaN.to(f.device).device)
             wi = wi[0]  # [L, C, k, k]
             max_wi = torch.sqrt(reduce_sum(torch.pow(wi, 2) + escape_NaN, axis=[1, 2, 3], keepdim=True))
             wi_normed = wi / max_wi
@@ -466,6 +467,7 @@ class ContextualAttention(nn.Module):
                 yi = yi.permute(0, 2, 1, 4, 3).contiguous()
             yi = yi.view(1, int_bs[2] * int_bs[3], int_fs[2], int_fs[3])  # (B=1, C=32*32, H=32, W=32)
             # softmax to match
+            # print(yi.shape, mm.shape)
             yi = yi * mm
             yi = F.softmax(yi*scale, dim=1)
             yi = yi * mm  # [1, L, H, W]
@@ -496,7 +498,7 @@ class ContextualAttention(nn.Module):
         w_add = torch.arange(int_fs[3]).view([1, 1, 1, int_fs[3]]).expand(int_fs[0], -1, int_fs[2], -1)
         ref_coordinate = torch.cat([h_add, w_add], dim=1)
         if self.use_cuda:
-            ref_coordinate = ref_coordinate.cuda()
+            ref_coordinate = ref_coordinate.to(f.device)
 
         offsets = offsets - ref_coordinate
         # flow = pt_flow_to_image(offsets)
@@ -504,7 +506,7 @@ class ContextualAttention(nn.Module):
         flow = torch.from_numpy(flow_to_image(offsets.permute(0, 2, 3, 1).cpu().data.numpy())) / 255.
         flow = flow.permute(0, 3, 1, 2)
         if self.use_cuda:
-            flow = flow.cuda()
+            flow = flow.to(f.device)
         # case2: visualize which pixels are attended
         # flow = torch.from_numpy(highlight_flow((offsets * mask.long()).cpu().data.numpy()))
 

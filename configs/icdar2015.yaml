@@ -1,39 +1,44 @@
 # I/O options
-image_root: /home/jrlees/datasets/icdar2015/syn_output/syn_ds_root_1280_2xa
-patch_size: 128
-image_size_h: 720
-image_size_w: 1280
-save_path: images/icdar2015_syn2x
-ckpt_save_path: ckpt/icdar2015_syn2x
+# image_root: /data/jingru.ljr/icdar2015/syn_ds_root_1280_2xa
+image_root: /data/jingru.ljr/COCO
+patch_size: 192
+image_size_h: 600
+image_size_w: 640
+# save_path: images/icdar2015_syn2x
+save_path: images/COCO_syn2x_style
+# ckpt_save_path: ckpt/icdar2015_syn2x
+# ckpt_save_path: /home/jingru.ljr/checkpoints/icdar_total2x_per
+ckpt_save_path: ckpt/COCO_syn2x_style
 dataset: IC15
 
 # Training options
-training_name: icdar2015_syn2x
+training_name: COCO_syn2x_style
+# training_name: icdar2015_syn2x
 batch_size: 16
 shared_depth: 2
-TDBmode: True
-dilation_depth: 3
+dilation_depth: 2
 num_blocks: 3
-gpu_id: 0
+gpu_id: 2
 lamda_rec: 1
-lamda_per: 0.05
+lamda_per: 0.2
 lamda_style: 120
 lamda_tv: 2
 lamda_mask: 1
 lamda_dis: 1
 lamda_gen: 1
 lamda_valid: 6
-log_dir: logs/log_icdar2015_syn2x_iim
+log_dir: logs/log_coco_syn2x_style
+# log_dir: logs/log_icdar2015_syn2x
 critic_iter: 1
 mask_iter: 0
 
-epochs: 2500
+epochs: 50
 print_frequency: 10
-save_frequency: 250
+save_frequency: 5
 start_epoch: 0
 
 # Network options
-TDBmode: close
+TDBmode: open
 gen_only: open
 open_image: open
 gate_option: close

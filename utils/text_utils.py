@@ -31,17 +31,22 @@ def mask2bboxes(score):
 
 def run_boxes(text_boxes, pred_mask, write_path, write_res_name):
     # print(text_boxes.dtype, type(text_boxes))
+    # print(text_boxes.shape)
     cv2.imwrite('/home/jingru.ljr/checkpoints/c.jpg', text_boxes)
+
     imgk = cv2.imread('/home/jingru.ljr/checkpoints/c.jpg')
+    # print(imgk.shape)
     # print(imgk[:, :, 0] - text_boxes[:, :, 1])
     logit = np.log((pred_mask) / (1 - pred_mask + 1e-9) + 1e-9)
     # Here 2.2 = log(0.9 / (1 - 0.9))
-    output = (np.sign(logit - 3.7) + 1) / 2
+    output = (np.sign(logit - 2.2) + 1) / 2
     kernel_mask = output * logit
+    # print(imgk.shape)
     # print(np.max(kernel_mask))
     bboxes = mask2bboxes(kernel_mask.astype(np.uint8))
     for bbox in bboxes:
         cv2.drawContours(imgk, [bbox.reshape(4,2).astype(np.int32)], -1, (0, 255, 0), 2)
+    # print(imgk.shape)
     cv2.imwrite(write_path, imgk)
     # exit(-1)
     fwrite = open(write_res_name, 'w')

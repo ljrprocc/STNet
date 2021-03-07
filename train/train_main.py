@@ -1,5 +1,6 @@
 import sys
-sys.path.append('/home/jrlees/journal/STNet')
+# sys.path.append('/home/jrlees/journal/STNet')
+sys.path.append('/home/jingru.ljr/Motif-Removal')
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 from networks.gan_model import *
 from utils.train_utils import *
@@ -107,6 +108,30 @@ def train_iim(model, synthesized, vm_mask,images, vgg_feas, per, opt, style=None
 
     return l, loss, gen_loss, mask_total_loss
 
+def train_iim_dgforward(model, synthesized, vm_mask,images, vgg_feas, per, opt, style=None):
+    critic_iter = opt['critic_iter']
+    mask_iter = opt['mask_iter']
+    guess_images, gen_loss, dis_loss, guess_mask, coarse_images, off = model.dis_gen_forward(synthesized, x_real=images)
+    # print(off.shape)
+    expanded_vm_mask = vm_mask.repeat(1, 3, 1, 1)
+    expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
+    reconstructed_pixels = guess_images * expanded_vm_mask
+    reconstructed_images = synthesized * (1 - expanded_vm_mask) + reconstructed_pixels
+    real_pixels = images * expanded_vm_mask
+    loss_l1_recon = l1_loss(reconstructed_pixels, real_pixels)
+    loss_l1_outer = l1_loss(reconstructed_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
+    # loss_all = l1_loss(reconstructed_images, images)
+    loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas(images))
+    loss_style = style(vgg_feas(reconstructed_images), vgg_feas(images))
+    gen_loss.backward(retain_graph=True)
+    # print(loss_l1_recon, loss_l1_outer, gen_loss)
+    # print(torch.mean(coarse_images), torch.mean(guess_mask), torch.mean(vm_mask))
+    loss = opt['lamda_rec'] * loss_l1_recon + opt['lamda_valid'] * loss_l1_outer + opt['lamda_per']*loss_perceptual + opt['lamda_style'] * loss_style
+    # loss.requires_grad_()
+    loss.backward()
+    model.gen_optimzer.step()
+    return dis_loss, loss, gen_loss, 0.0
+
 def train(net, train_loader, test_loader, opts):
     # net = nets.module
     bce = nn.BCELoss()
@@ -124,6 +149,7 @@ def train(net, train_loader, test_loader, opts):
     batch_size = opts['batch_size']
     images_path = opts['save_path']
     gate = opts['gate_option'] == 'open'
+    image_encoder = opts['open_image'] == 'open'
     nets_path = opts['ckpt_save_path']
     # net.set_optimizers()
     losses = []
@@ -155,19 +181,20 @@ def train(net, train_loader, test_loader, opts):
                     # print(results)
                     gen_loss, dis_loss = 0., 0.
                     expanded_vm_mask = vm_mask.repeat(1, 3, 1, 1)
-                    image_encoder = opts['open_image']
+                    # image_encoder = opts['open_image']
                     if image_encoder:
                         expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
                         reconstructed_pixels = guess_images * expanded_vm_mask
-                        reconstructed_images = synthesized * (1 - expanded_guess_mask) + reconstructed_pixels
+                        reconstructed_images = synthesized * (1 - expanded_vm_mask) + reconstructed_pixels
                     real_pixels = images * expanded_vm_mask
                     batch_cur_size = vm_mask.shape[0]
                     # total_area = vm_mask.shape[-1] * vm_mask.shape[-2]
                     net.zero_grad_all()
                     if image_encoder:
-                        loss_l1_recon = l1_loss(reconstructed_pixels, real_pixels)
-                        loss_l1_outer = l1_loss(reconstructed_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask))
-
+                        loss_l1_recon = l1_relative(reconstructed_pixels, real_pixels, vm_area)
+                        loss_l1_outer = l1_relative(guess_images * (1 - expanded_vm_mask), images * (1 - expanded_vm_mask), total_area-vm_area)
+                        # loss_perceptual = 0.
+                        # loss_style = 0.
                         loss_style=style(vgg_feas(reconstructed_images), vgg_feas(images))
                         loss_perceptual = per(vgg_feas(reconstructed_images), vgg_feas(images))
                         # loss_perceptual=0.
@@ -180,7 +207,7 @@ def train(net, train_loader, test_loader, opts):
                     net.step_all()
                     losses.append(loss.item())
                 else:
-                    dis_loss, gen_loss, l, mask_loss = train_iim(model=net, synthesized=synthesized, vm_mask=vm_mask, images=images, vgg_feas=vgg_feas, per=per, opt=opts, style=style)
+                    dis_loss, gen_loss, l, mask_loss = train_iim_dgforward(model=net, synthesized=synthesized, vm_mask=vm_mask, images=images, vgg_feas=vgg_feas, per=per, opt=opts, style=style)
                     D_losses.append(dis_loss.item())
                     G_losses.append(gen_loss.item())
             train_tag = opts['training_name']
@@ -209,7 +236,7 @@ def train(net, train_loader, test_loader, opts):
             print("checkpointing...")
             gate_str = 'g' if gate else ''
             image_name = '%s/%s_%d%s_fine.png' % (images_path, train_tag, real_epoch, gate_str)
-            _ = save_test_images(net, test_loader, image_name, device, image_decoder=opts['open_image'] == 'open')
+            _ = save_test_images(net, test_loader, image_name, device, image_decoder=opts['open_image'] == 'open', TDB_mode=TDBmode)
             if not TDBmode and not os.path.exists('%s/epoch%d'%(nets_path, real_epoch)):
                 os.mkdir('%s/epoch%d'%(nets_path , real_epoch))
             if not TDBmode:
@@ -242,7 +269,7 @@ def run(opts):
     init_folders(nets_path, images_path)
     if TDBmode:
     # print(len(train_loader))
-        base_net = init_nets(opt, nets_path, device, open_image=image_encoder, tag='')
+        base_net = init_nets(opt, nets_path, device, tag='')
     # pretrain_path = '%s/checkpoints/icdar_total3x_per/' % (root_path)
     else:
         base_net = InpaintModel(opt, nets_path, device, tag='1750', gate=gate, gen_only=gen_only).to(device)

@@ -6,7 +6,8 @@ import math
 import time
 import torch
 import torch.nn as nn
-import parser
+# import parser
+import argparse
 from PIL import Image
 from torchvision import transforms
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
@@ -38,7 +39,7 @@ import tqdm
 # image_encoder=False
 # gate = False
 
-# criterion = nn.MSELoss()
+criterion = nn.MSELoss()
 
 # # datasets paths
 # # cache_root = ['/data/jingru.ljr/icdar2015/syn_ds_root_1280_3x/']
@@ -56,11 +57,14 @@ def normalize(img):
     a = a * 2 - 1
     return transforms.ToTensor()(a).float().to(device)
 
-def test(test_loader, model, debug=False, baseline=False):
+def test(test_loader, model, debug=False, baseline=False, opt=None):
     avg_psnr = [0., 0.]
     avg_ssim = [0., 0.]
     total_time = 0.
     l = 0
+    gpu_id = opt['gpu_id']
+    device = 'cuda:%d'%(gpu_id)
+    image_encoder = opt['open_image'] == 'open'
     with torch.no_grad():
         for i, batch in tqdm.tqdm(enumerate(test_loader)):
             img, ori = batch[0].to(device), batch[1].to(device)
@@ -83,14 +87,15 @@ def test(test_loader, model, debug=False, baseline=False):
             real_img = real_img.squeeze().cpu().numpy().copy() / 2 + 0.5
             # print(real_img.shape)
             # exit(-1)
-            # real_img = np.transpose(real_img, (1,2,0)) * 255
+            real_img = np.transpose(real_img, (1,2,0)) * 255
             # real_img = real_img[:, :, ::-1]
             # print(real_img)
-            lens = run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
-            l += lens
+
+            # lens = run_boxes(real_img, guess_mask.squeeze().cpu().numpy(), write_path, write_res_name)
+            # l += lens
             b = time.time()
             expanded_guess_mask = guess_mask.repeat(1, 3, 1, 1)
-            transformed_guess_mask = expandded_guess_mask * 2 - 1
+            transformed_guess_mask = expanded_guess_mask * 2 - 1
             expanded_predicted_mask = (expanded_guess_mask > 0.9).float()
             transformed_predicted_mask = expanded_predicted_mask * 2 - 1
             total_time = total_time + (b - a)
@@ -133,10 +138,8 @@ def test(test_loader, model, debug=False, baseline=False):
     print('FPS: {:.2f}'.format(l / total_time))
 
 
-def run(opts):
-    config_path = opts.config
-    opt = get_config(config_path)
-    train_loader, test_loader = init_loaders(opt)
+def run(opts, opt):
+    
     gpu_id = opt['gpu_id']
     device = 'cuda:%d'%(gpu_id)
     # print()
@@ -145,12 +148,12 @@ def run(opts):
     images_path = opt['save_path']
     image_encoder = opt['open_image'] == 'open'
     gate = opt['gate_option'] == 'open'
-    opt = load_globals(nets_path, globals(), override=True)
+    # opt = load_globals(nets_path, globals(), override=True)
 
-    base_net = init_nets(opt, nets_path, device, tag='25003x', open_image=image_encoder)
+    base_net = init_nets(opt, nets_path, device, tag='2500')
     # base_net = InpaintModel(opt, nets_path, device, tag='14003x', gate=gate).to(device)
     # base_net.load(1100)
-    train_loader, test_loader = init_loaders(opt, cache_root=cache_root)
+    train_loader, test_loader = init_loaders(opt)
 
     test(test_loader, base_net, debug=True, opt=opt)
 
@@ -158,8 +161,12 @@ if __name__ == '__main__':
     multiprocessing.set_start_method('spawn', force=True)
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='configs/icdar2015.yaml')
-    
+    # train_loader, test_loader = init_loaders(opt)
     opts = parser.parse_args()
+    config_path = opts.config
+    opt = get_config(config_path)
+    # print(opts)
+    train_tag = opt['training_name']
     write_dir = '/data/jingru.ljr/AAAI2021/result/%s'%(train_tag)
     vis_path = os.path.join(write_dir, 'vis/')
     res_path = os.path.join(write_dir, 'res/')
@@ -172,4 +179,4 @@ if __name__ == '__main__':
         os.mkdir(res_path)
     if not os.path.exists(inpaint_path):
         os.mkdir(inpaint_path)
-    run(opts)
+    run(opts, opt)

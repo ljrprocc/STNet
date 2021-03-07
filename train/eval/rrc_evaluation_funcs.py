@@ -52,7 +52,7 @@ def load_zip_file(file,fileNameRegExp='',allEntries=False):
     allEntries validates that all entries in the ZIP file pass the fileNameRegExp
     """
     try:
-        # print(file)
+        print(file)
         archive=zipfile.ZipFile(file, mode='r', allowZip64=True)
         # print(archive)
     except :
